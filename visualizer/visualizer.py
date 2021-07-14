@@ -11,7 +11,6 @@ import warnings
 import colorsys
 import pygame_gui
 import numpy as np
-from scipy import signal
 from collections import deque
 from datetime import datetime
 import paho.mqtt.client as paho
@@ -19,17 +18,6 @@ import paho.mqtt.client as paho
 import random
 
 max_hue = (240 * 0.00277777777777)
-
-
-# TODO:
-#  1) Vertical sliders to control contrast levels on visualization (switch between color and grayscale) √
-#  2) Play/pause buttons and keyboard shortcuts √
-#  3) FF/RW buttons and keyboard shortcuts √
-#  4) Bounding box visualization (blocked by lack of data with bounding box) √
-#  5) Help screen accessible with h key
-#  6) Option to use for labeling
-#  7) Multi-sensor support
-#  8) Side-by-side visualization with Nest camera
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
