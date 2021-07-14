@@ -271,7 +271,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             # ESC: quit this scene
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: running = False
-                elif event.key == pygame.K_SPACE: pause = not pause
+                elif event.key == pygame.K_SPACE:
+                    if not label_condiition:
+                        pause = not pause
                 elif event.key == pygame.K_LEFT: text_line = max(text_line - 100, 0)
                 elif event.key == pygame.K_RIGHT:
                     try: text_line += 100
@@ -347,7 +349,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     f.writelines([x + "\n" for x in det_out_file])
                         running = False
                     elif not live and event.ui_element == play_button:
-                        pause = False
+                        if not label_condiition:
+                            pause = False
                     elif not live and event.ui_element == pause_button:
                         pause = True
                     elif not live and event.ui_element == ff:
