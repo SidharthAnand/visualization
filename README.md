@@ -58,6 +58,10 @@ And *Edit Bounding Box* will become *Done Editing*
 
 While you are editing the bounding box data, you will be able to scrub forward and backward with the scroll bar as well as adjust the current frame with FF, RW, Previous Frame, and Next frame, but play functionality will be disabled until *Done Editing* has been pressed.
 
+To add a bounding box, just click on the data window to specify the TOP LEFT and BOTTOM RIGHT corners of the box.
+
 Pressing *Done Editing* does **NOT** save the file and quit out of the visualizer; it just stops the editing process until it is pressed again.
 
 Once you are finished editing the bounding box data, quit out of the visualizer to save the file using *Exit* or the escape key. A new file will be written to the same path as your original detection text file, but with the suffix *_EDITED* attached to denote that it has been checked by hand. The new file will maintain all bounding boxes that were not edited, even if you did not scroll through them in the visualizer. If you wish to rewrite the file, **DELETE THE EXISTING FILE BEFORE CREATING A NEW ONE WITH THE VISUALIZER'S LABELING TOOL**, or just pass in the *_EDITED* file to the tool in the running command to restart the process with the file you just finished editing.
+
+NOTE: There is not yet support for writing a brand new file from a raw data file. This is currently under development and will be included in the next version of the visualizer.
