@@ -15,8 +15,6 @@ from collections import deque
 from datetime import datetime
 import paho.mqtt.client as paho
 
-import random
-
 max_hue = (240 * 0.00277777777777)
 
 
@@ -33,6 +31,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     global pause
     global timestamp
     global det_out_file
+    global times
     timestamp = time.time()
 
     client = paho.Client()
@@ -137,6 +136,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         else:
             detection_text = None
             det_out_file = []
+            times = {}
         playback = pygame_gui.elements.UIHorizontalSlider(
             relative_rect=pygame.Rect((box // 20,
                                        int(aspect[1] * 1.02),
@@ -200,6 +200,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             prev_button.visible = False
     else:
         _thread.start_new_thread(mqtt_processes, (mqtt_address, data_topic, None, "butlr", "2019Ted/"))
+
     logo = pygame.image.load("../logo/butlr.logo.png")
     disp.blit(logo, (width - (box // 10), (1.1 * height) - (box // 10)))
     surf = pygame.surfarray.make_surface(color(np.full((8, 8), low_bound), low_bound, high_bound))
@@ -276,26 +277,38 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
+                # print(det_curr)
                 if label_condiition:
                     x = pos[0]
                     y = pos[1]
                     if 0 <= x - (box // 20) <= box and 0 <= y - (box // 20) <= box:
+
                         points.append([np.around((x - box//20) / box, 4),
                                        np.around((y - box//20) / box, 4)])
                         if len(points) == 2:
+                            # print(det_out_file)
                             new_boxes.append([p[::-1] for p in points])
-                            try:
-                                det_line = eval(det_out_file[det_curr])
-                                current_packet = det_line
-                            except:
-                                current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
-                                det_out_file.insert(det_curr, str(current_packet))
+                            if detection_path:
+                                try:
+                                    det_line = eval(det_out_file[det_curr])
+                                    if det_line["timestamp"] == timestamp:
+                                        current_packet = det_line
+                                    else:
+                                        raise Exception
+                                except Exception:
+                                    current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
+                                    det_out_file.insert(det_curr, str(current_packet))
+                                bbs = current_packet["bounding box"]
+                            else:
+                                bbs = times[timestamp]
 
-                            bbs = current_packet["bounding box"]
                             bbs.extend(new_boxes)
-                            det_out_file[det_curr] = str({"bounding box": bbs,
-                                                          "timestamp": timestamp,
-                                                          "ID": sensor_mac})
+                            if detection_path:
+                                det_out_file[det_curr] = str({"bounding box": bbs,
+                                                              "timestamp": timestamp,
+                                                              "ID": sensor_mac})
+                            else:
+                                times[timestamp] = bbs
                             points = []
                             new_boxes = []
 
@@ -329,11 +342,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             color_on = True
                     elif event.ui_element == quit_button:
                         if label:
-                            det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
-                            with open(edited_detection_path, "a+") as f:
-                                if detection_path:
-                                    f.writelines(det_out_file)
-                                else:
+                            if detection_path:
+                                det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
+                                with open(edited_detection_path, "a+") as f:
+                                   f.writelines(det_out_file)
+                            else:
+                                det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
+                                with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
                         running = False
                     elif not live and event.ui_element == play_button:
@@ -363,8 +378,11 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     elif label_condiition and event.ui_element == prev_button:
                         text_line = max(0, text_line - 1)
                     elif label_condiition and event.ui_element == clear_button:
-                        sensor = eval(det_out_file[det_curr])["ID"]
-                        det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                        if detection_path:
+                            sensor = eval(det_out_file[det_curr])["ID"]
+                            det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                        else:
+                            times[timestamp] = []
                         transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
                         transparent_surface = transparent_surface.convert_alpha()
                         disp.blit(surf, (box // 20, box // 20))
@@ -491,7 +509,9 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global text_length
     global pause
     global timestamp
+    global times
     last_time = time.time()
+    new_file = not det_text
     last_detection_line = 0
     parse_array = False
     while True:
@@ -524,7 +544,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
         else:
             text_line += 1
             continue
-        if det_text:
+        if not new_file:
             detections_current = det_text[last_detection_line:]
             det_index = 0
             try:
@@ -540,6 +560,29 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
                         time_curr = eval(detections_current[det_index])["timestamp"]
             except IndexError:
                 pass
+        else:
+            if timestamp not in times.keys():
+                times[timestamp] = []
+            detection_queue.append(times[timestamp])
+            """det_index = 0
+            det_curr = 0
+            try:
+                time_curr = eval(det_text[0])["timestamp"]
+                # print(time_curr)
+                while time_curr <= timestamp:
+                    if time_curr == timestamp:
+                        detection_queue.append(eval(det_text[det_curr])["bounding box"])
+                        det_packet_curr = eval(det_text[det_curr])
+                        det_curr = det_index
+                        break
+                    else:
+                        det_index += 1
+                        time_curr = eval(det_text[det_curr])["timestamp"]
+                        if det_index >= len(det_text):
+                            det_curr = det_index
+                            break
+            except IndexError as e:
+                pass"""
         playback.set_current_value(text_line / len(text))
         playback.update(1 / 100)
         if realtime >= start_time:
