@@ -40,7 +40,10 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
                 if message['name'] == 'notifData':
                     try: timestamp = message["fields"]["timestamp"]
                     except: timestamp = 0
-                    message["fields"]["data"] = (message["fields"]["data"]).tolist()
+                    try:
+                        message["fields"]["data"] = (message["fields"]["data"]).tolist()
+                    except:
+                        pass
                     data_queue.append(str(message))
 
         except Exception as e:
