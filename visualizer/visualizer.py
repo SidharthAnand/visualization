@@ -1,13 +1,9 @@
-import os
-import re
 import ast
 import sys
-import json
 import time
 import pygame
 import _thread
 import argparse
-import warnings
 import colorsys
 import pygame_gui
 import numpy as np
@@ -68,9 +64,12 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         lb = 0.75
         hb = 0.745
         plb = 0.83
-
-    font = pygame.font.Font('../font/Consola.ttf', font_size_small)
-    title_font = pygame.font.Font('../font/Consola.ttf', font_size_large)
+    try:
+        font = pygame.font.Font('../font/Consola.ttf', font_size_small)
+        title_font = pygame.font.Font('../font/Consola.ttf', font_size_large)
+    except FileNotFoundError:
+        font = pygame.font.Font('font/Consola.ttf', font_size_small)
+        title_font = pygame.font.Font('font/Consola.ttf', font_size_large)
     if not live:
         cap = data_path
     else:
@@ -200,8 +199,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             prev_button.visible = False
     else:
         _thread.start_new_thread(mqtt_processes, (mqtt_address, data_topic, None, "butlr", "2019Ted/"))
-
-    logo = pygame.image.load("../logo/butlr.logo.png")
+    try:
+        logo = pygame.image.load("../logo/butlr.logo.png")
+    except (FileNotFoundError, pygame.error):
+        logo = pygame.image.load("logo/butlr.logo.png")
     disp.blit(logo, (width - (box // 10), (1.1 * height) - (box // 10)))
     surf = pygame.surfarray.make_surface(color(np.full((8, 8), low_bound), low_bound, high_bound))
     surf = pygame.transform.scale(surf, (box, box))
@@ -229,9 +230,6 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
     while running:
         disp.fill(black)
-
-        # transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
-        # transparent_surface = transparent_surface.convert_alpha()
 
         if label and labeling_active:
             clear_button.visible = True
@@ -622,13 +620,13 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
             # message = json.loads(msg.payload)
             array = lambda x: np.asarray(x)
             message = eval(msg.payload)
-            if type(message) is tuple: message = message[0]
             # print(message)
+            if type(message) is tuple: message = message[0]
             # GENERAL CONDITION
             if list(message.keys())[0] == 'fields':
                 if message['name'] == 'notifData':
                     try: timestamp = message["fields"]["timestamp"]
-                    except: timestamp = 0
+                    except: timestamp = message["timestamp"]
                     data_queue.append(message)
                     bbs = network(message)
                     if bbs: detection_queue.append(bbs)
