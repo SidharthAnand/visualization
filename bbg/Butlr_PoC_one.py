@@ -1,35 +1,20 @@
 # math
-import numpy as np
-from scipy import stats
 import random, math
-from scipy.spatial import ConvexHull
-import shapely
-from shapely.geometry import LineString, point
-from shapely.geometry.polygon import Polygon
 # viz
-import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import os
 import pygame
 import pygame.freetype
 import pygame_gui
-import shutil
 # os
-import time
-from time import mktime, strptime, gmtime, strftime, localtime
+from time import strftime, localtime
 from calendar import timegm
 import json
 import pickle
-from os import path, listdir
-import imageio
 import _thread
-import sys
 from collections import deque
 import argparse
-import copy
 # serial
 import serial
-import select
 import ast
 # tracking
 from utilities import *
@@ -40,7 +25,7 @@ from sys import getsizeof
 from bresenham import bresenham
 # import cv2
 
-import config_butlr_team, rules
+import rules, config_butlr_team
 
 global printing_run_time, debug_run_time
 printing_run_time = False

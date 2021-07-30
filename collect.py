@@ -1,6 +1,10 @@
 from visualizer.visualizer import *
 import time
 import _thread
+import os
+from bbg.algorithm_data_format import transform8, transform32
+from bbg.trans_format_total import process_fun
+from format_data import unify
 import paho.mqtt.client as paho
 
 
@@ -85,20 +89,30 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10):
                                            f"{np.around(period / 60., 3)} minutes elapsed.")
         if i > start_time + period: break
     print(f"Collected {len(lines)} lines of data in {period} seconds.\n\n")
-    # print("Automatically generating bounding boxes on the collected data...\n")
-    cmd32 = f'python bbg/Butlr_PoC_one.py -m synthetic_data_one -dp {data_path_out} -n t -amm t -mmdl 0.1 ' \
-            f'-imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 -sres "32*32" -eres "8*8" ' \
-            f'-sc 0.1 -thh auto -thc -999 -pub f -be f -dr 7,10 -csh -0.4 -bsh -1.0 -cr2 0.03 -br2 0.08 ' \
-            f'-dth 20,30 -ps 100 -bbp {data_path_out[:-4] + "boundingbox.txt"} -viz f'
-    cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp {data_path_out} -mqid xxx  ' \
-           f'-pub f -n t -amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 ' \
-           f'-lt 100 -vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 ' \
-           f'-ds 0.2001,0.0001 -de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 ' \
-           f'-wldcd f -dtcmq f -ps 1 -be f -viz t -bbp {data_path_out[:-4] + "boundingbox.txt"} -dth 10,20'
-    # if big_data:
-    #     os.system(cmd32)
-    # else:
-    #     os.system(cmd8)
+    print("Automatically generating bounding boxes on the collected data...\n")
+
+    labels_path_out = data_path_out[:-4] + "_boundingbox.txt"
+    if big_data:
+        input_file = transform32(data_path_out)
+        algorithm_input_file = process_fun(input_file)
+        cmd32 = f'python bbg/Butlr_PoC_one_stop.py -m synthetic_data_one -dp {algorithm_input_file} -n t -amm t -mmdl 0.1 ' \
+                f'-imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 -sres "32*32" -eres "8*8" ' \
+                f'-sc 0.1 -thh auto -thc -999 -pub f -be f -dr 7,10 -csh -0.4 -bsh -1.0 -cr2 0.03 -br2 0.08 ' \
+                f'-dth 20,30 -ps 100 -bbp {labels_path_out} -viz f'
+        os.system(cmd32)
+    else:
+        algorithm_input_file = transform8(data_path_out)
+        input_file = algorithm_input_file
+        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp {algorithm_input_file} -mqid xxx  ' \
+               f'-pub f -n t -amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 ' \
+               f'-lt 100 -vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 ' \
+               f'-ds 0.2001,0.0001 -de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 ' \
+               f'-wldcd f -dtcmq f -ps 1 -be f -viz f -bbp {labels_path_out} -dth 10,20'
+        os.system(cmd8)
+    if os.path.exists(algorithm_input_file): os.remove(algorithm_input_file)
+    if os.path.exists(input_file): os.remove(input_file)
+    print("Writing unified file...")
+    unify(data_path_out, labels_path_out)
     print("Success")
 
 

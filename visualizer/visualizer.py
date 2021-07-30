@@ -247,10 +247,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         disp.blit(high_bound_text, high_bound_rect)
         disp.blit(logo, (width - (box // 10), (1.1 * height) - (box // 10)))
 
-        time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
-        time_rect = time_text.get_rect()
-        time_rect.topleft = ((aspect_ratio[0] // 50), (aspect_ratio[1] // 50))
-        disp.blit(time_text, time_rect)
+        # time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
+        # time_rect = time_text.get_rect()
+        # time_rect.topleft = ((aspect_ratio[0] // 50), (aspect_ratio[1] // 50))
+        # disp.blit(time_text, time_rect)
         for event in pygame.event.get():
             # QUIT
             if event.type == pygame.QUIT:

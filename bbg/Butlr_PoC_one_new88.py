@@ -1,35 +1,20 @@
 # math
-import numpy as np
-from scipy import stats
 import random, math
-from scipy.spatial import ConvexHull
-import shapely
-from shapely.geometry import LineString, point
-from shapely.geometry.polygon import Polygon
 # viz
-import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import os
 import pygame
 import pygame.freetype
 import pygame_gui
-import shutil
 # os
-import time
-from time import mktime, strptime, gmtime, strftime, localtime
+from time import strftime, localtime
 from calendar import timegm
 import json
 import pickle
-from os import path, listdir
-import imageio
 import _thread
-import sys
 from collections import deque
 import argparse
-import copy
 # serial
 import serial
-import select
 import ast
 # tracking
 from utilities import *
@@ -38,9 +23,9 @@ import paho.mqtt.client as paho
 import sys
 from sys import getsizeof
 from bresenham import bresenham
-import cv2
+# import cv2
 
-import config_butlr_team, rules
+import rules, config_butlr_team
 
 global printing_run_time, debug_run_time
 printing_run_time = False
@@ -131,6 +116,14 @@ def compress_long_traces(trackingDict, lastN=3, beforeN=2, len_th=20):
                 compressed_trace = tmp_a[:-1] + tmp_b
             trace['trace'] = compressed_trace
     return trackingDict
+
+
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+
+def enablePrint():
+    sys.stdout = sys.__stdout__
 
 @run_time_main
 def generate_positions(x_start, y_start, cell_size, boxList, max_split_time=np.inf):
@@ -5311,8 +5304,12 @@ def main():
     parser.add_argument('-efed', default='f', help='''enable futon effect detection, default="t"''')
     parser.add_argument('-fecm', default='fc', help='''futon effect checking method''')
     parser.add_argument('-bbp', default='E:/work/week8/bb_data.txt', help='''the data path of saved bounding box data''')
-    
+    parser.add_argument("-sps", default="f")
+
     args = parser.parse_args()
+    sps = args.sps == "t"
+    if sps: blockPrint()
+
     # using parser to specify parameters:
     print(f'version = {version}')
     run_mode = args.m
