@@ -106,11 +106,11 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
         assert mac, "Please specify a mac address"
         algorithm_input_file = transform8(data_path_out)
         input_file = algorithm_input_file
-        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp {algorithm_input_file} -mqid {mac} ' \
-               f'-pub f -n t -amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 ' \
-               f'-lt 100 -vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 ' \
-               f'-ds 0.2001,0.0001 -de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 ' \
-               f'-wldcd f -dtcmq f -ps 1 -be f -viz f -bbp {labels_path_out} -dth 10,20'
+        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp "{algorithm_input_file}" -mqid {mac}  -pub f -n t ' \
+               f'-amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 -lt 100 ' \
+               f'-vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 -ds 0.2001,0.0001 ' \
+               f'-de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 -wldcd f -dtcmq f ' \
+               f'-ps 1 -be t -viz f -bbp {labels_path_out}'
         os.system(cmd8)
     if os.path.exists(algorithm_input_file): os.remove(algorithm_input_file)
     if os.path.exists(input_file): os.remove(input_file)
