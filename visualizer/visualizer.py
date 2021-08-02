@@ -656,7 +656,9 @@ def main():
     parser.add_argument("-path", default="", help="Path to saved data (in .txt format)")
     parser.add_argument("-det", default="", help="Path to saved detection/bounding box data")
     parser.add_argument("-mqdi", default="", help="MQTT Data Channel")
-    parser.add_argument("-mqba", default="", help="MQTT Broker Address")
+    parser.add_argument("-mqba",
+                        default="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
+                        help="MQTT Broker Address")
     parser.add_argument("-fps", default="8")
     parser.add_argument("-sz", default="600", help="Size (in pixels) of data render.")
     parser.add_argument("-lbl", default="f")
@@ -669,7 +671,7 @@ def main():
     address = args.mqba if args.mqba else None
     fps = eval(args.fps)
     aspect_ratio = (eval(args.sz), eval(args.sz))
-    live = (not path) and (len(topic) > 0) and (len(address) > 0)
+    live = (not path) and (len(topic) > 0)
     label = (args.lbl == "t")
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
                label=label, detection_path=det_path)

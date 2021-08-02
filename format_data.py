@@ -72,6 +72,7 @@ def unify(data_path, label_path=None):
                 except IndexError:
                     label_time = timestamp
             for box in boxes:
+                # print(box)
                 x_center = (box[1][0] + box[0][0]) * 0.5
                 y_center = (box[1][1] + box[0][1]) * 0.5
                 width = np.abs(box[1][0] - box[0][0])

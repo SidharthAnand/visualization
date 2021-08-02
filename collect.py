@@ -66,7 +66,7 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
     client.loop_forever()
 
 
-def collect_data(mqtt_address, data_topic, data_path_out, period=10):
+def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
     global data_queue
 
     big_data = False
@@ -82,6 +82,8 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10):
     while True:
         while len(data_queue) > 0:
             packet = data_queue.popleft()
+            if eval(packet)["fields"]["macAddress"] != mac:
+                break
             lines.append(packet)
             f.write(packet + "\n")
         i = time.time()
@@ -101,9 +103,10 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10):
                 f'-dth 20,30 -ps 100 -bbp {labels_path_out} -viz f'
         os.system(cmd32)
     else:
+        assert mac, "Please specify a mac address"
         algorithm_input_file = transform8(data_path_out)
         input_file = algorithm_input_file
-        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp {algorithm_input_file} -mqid xxx  ' \
+        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp {algorithm_input_file} -mqid {mac} ' \
                f'-pub f -n t -amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 ' \
                f'-lt 100 -vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 ' \
                f'-ds 0.2001,0.0001 -de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 ' \
@@ -122,13 +125,15 @@ def main():
     parser.add_argument("-mqdi", default="butlr/htps/test")
     parser.add_argument("-path", help="Output path for data text file.")
     parser.add_argument("-time", default="600", help="Time (in seconds) to collect data.")
+    parser.add_argument("-mac", default="00-17-0d-00-00-70-b9-e3")
 
     args = parser.parse_args()
     mqba = args.mqba
     mqdi = args.mqdi
     t = eval(args.time)
+    mac = args.mac
     path = args.path if args.path else None
     assert path is not None, "Please specify a path to which the data should be written."
-    collect_data(mqba, mqdi, path, period=t)
+    collect_data(mqba, mqdi, path, period=t, mac=mac)
 
 if __name__ == "__main__": main()
