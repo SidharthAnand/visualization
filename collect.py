@@ -6,6 +6,7 @@ from bbg.algorithm_data_format import transform8, transform32
 from bbg.trans_format_total import process_fun
 from format_data import unify
 import paho.mqtt.client as paho
+from datetime import datetime
 
 
 client = paho.Client()
@@ -66,7 +67,9 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
     client.loop_forever()
 
 
-def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
+def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac="", left=0, right=0, num_in_frame=2):
+    startCollect = datetime.fromtimestamp(time.time())
+    print("Beginning at", startCollect)
     global data_queue
 
     big_data = False
@@ -87,17 +90,18 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
             lines.append(packet)
             f.write(packet + "\n")
         i = time.time()
-        if i - start_time % 30 == 0: print(f"{np.around((i-start_time) / 60., 3)} of "
-                                           f"{np.around(period / 60., 3)} minutes elapsed.")
+        if 0 < i - start_time % 30 < 0.5: print(f"{np.around((i-start_time) / 60., 3)} of "
+                                                f"{np.around(period / 60., 3)} minutes elapsed.")
         if i > start_time + period: break
     print(f"Collected {len(lines)} lines of data in {period} seconds.\n\n")
+    endCollect = datetime.fromtimestamp(time.time())
     print("Automatically generating bounding boxes on the collected data...\n")
 
     labels_path_out = data_path_out[:-4] + "_boundingbox.txt"
     if big_data:
         input_file = transform32(data_path_out)
         algorithm_input_file = process_fun(input_file)
-        cmd32 = f'python bbg/Butlr_PoC_one_stop.py -m synthetic_data_one -dp {algorithm_input_file} -n t -amm t -mmdl 0.1 ' \
+        cmd32 = f'python3 bbg/Butlr_PoC_one_stop.py -m synthetic_data_one -dp {algorithm_input_file} -n t -amm t -mmdl 0.1 ' \
                 f'-imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 -sres "32*32" -eres "8*8" ' \
                 f'-sc 0.1 -thh auto -thc -999 -pub f -be f -dr 7,10 -csh -0.4 -bsh -1.0 -cr2 0.03 -br2 0.08 ' \
                 f'-dth 20,30 -ps 100 -bbp {labels_path_out} -viz f'
@@ -106,7 +110,7 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
         assert mac, "Please specify a mac address"
         algorithm_input_file = transform8(data_path_out)
         input_file = algorithm_input_file
-        cmd8 = f'python bbg/Butlr_PoC_one_new88.py -m saved_data -dp "{algorithm_input_file}" -mqid {mac}  -pub f -n t ' \
+        cmd8 = f'python3 bbg/Butlr_PoC_one_new88.py -m saved_data -dp "{algorithm_input_file}" -mqid {mac}  -pub f -n t ' \
                f'-amm t -mmdl 0.1 -imin 0 -imax 10 -wamm 1000 -famm 5 -abg 1 -rabg 9999999 -fabg 10 -lt 100 ' \
                f'-vt 10,50 -dmh both -dmc th -dr 2.5,3 -thh auto -thc -999 -thstdc 7.5 -thstdh 3 -ds 0.2001,0.0001 ' \
                f'-de 0.2001,0.9999 -be f -trk f -art t -tshc t -cfo f -cmsg seamless -sens 1 -wldcd f -dtcmq f ' \
@@ -115,8 +119,10 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac=""):
     if os.path.exists(algorithm_input_file): os.remove(algorithm_input_file)
     if os.path.exists(input_file): os.remove(input_file)
     print("Writing unified file...")
-    unify(data_path_out, labels_path_out)
+    unify(data_path_out, labels_path_out, left=left, right=right, num_in_frame=num_in_frame)
     print("Success")
+    print("Begin:", startCollect)
+    print("End:", endCollect)
 
 
 def main():
@@ -124,16 +130,23 @@ def main():
     parser.add_argument("-mqba", default="ec2-54-245-187-200.us-west-2.compute.amazonaws.com")
     parser.add_argument("-mqdi", default="butlr/htps/test")
     parser.add_argument("-path", help="Output path for data text file.")
-    parser.add_argument("-time", default="600", help="Time (in seconds) to collect data.")
+    parser.add_argument("-time", default="300", help="Time (in seconds) to collect data.")
     parser.add_argument("-mac", default="00-17-0d-00-00-70-b9-e3")
+    parser.add_argument("-p", default="2")
+    parser.add_argument("-left", default="0")
+    parser.add_argument("-right", default="0")
 
     args = parser.parse_args()
     mqba = args.mqba
     mqdi = args.mqdi
     t = eval(args.time)
+    left = eval(args.left)
+    right = eval(args.right)
+    people = eval(args.p)
     mac = args.mac
     path = args.path if args.path else None
     assert path is not None, "Please specify a path to which the data should be written."
-    collect_data(mqba, mqdi, path, period=t, mac=mac)
+    collect_data(mqba, mqdi, path, period=t, mac=mac, left=left, right=right, num_in_frame=people)
+
 
 if __name__ == "__main__": main()

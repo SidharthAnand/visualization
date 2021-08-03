@@ -1,11 +1,11 @@
 # math
 import numpy as np
-from scipy import stats
+# from scipy import stats
 import random, math
-from scipy.spatial import ConvexHull
-import shapely
-from shapely.geometry import LineString, point
-from shapely.geometry.polygon import Polygon
+# from scipy.spatial import ConvexHull
+# import shapely
+# from shapely.geometry import LineString, point
+# from shapely.geometry.polygon import Polygon
 # viz
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -22,7 +22,7 @@ from calendar import timegm
 import json
 import pickle
 from os import path, listdir
-import imageio
+# import imageio
 import _thread
 import sys
 from collections import deque
@@ -39,7 +39,7 @@ import paho.mqtt.client as paho
 import sys
 from sys import getsizeof
 from bresenham import bresenham
-import cv2
+# import cv2
 
 import config_butlr_team, rules
 
@@ -1134,8 +1134,8 @@ def viz_counts(track_info, frame_num, door_line_start, door_line_end, x_start, y
 
     # viz ppl counting number
     # text = f'ppl_count = {round(ppl_count_global+ppl_count)}; ppl_count_in = {round(ppl_count_in_global+ppl_count_in)}; ppl_count_out = {round(ppl_count_out_global+ppl_count_out)}'
-    text = f'ppl_count_in = {round(ppl_count_in_global + ppl_count_in)}; ppl_count_out = {round(ppl_count_out_global + ppl_count_out)}'
-    fonts[2].render_to(screen, (x_start - 1.5 * cell_size, y_start + 9.0 * cell_size), text, pygame.Color('red'))
+    # text = f'ppl_count_in = {round(ppl_count_in_global + ppl_count_in)}; ppl_count_out = {round(ppl_count_out_global + ppl_count_out)}'
+    # fonts[2].render_to(screen, (x_start - 1.5 * cell_size, y_start + 9.0 * cell_size), text, pygame.Color('red'))
     return ppl_count, ppl_count_in, ppl_count_out
 
 def pygame_init(screen_width=1280, screen_height=720, fullscreen=False, title=None, logo_path=None, font_path=None):
@@ -1751,8 +1751,8 @@ def analyze_single_frame(mat, mat_raw, imgName, i,  # data for this frame
     records['imgNames'].append(imgName)
 
     if printing_run_time and debug_run_time: t2 = time.time()
-    if printing_run_time and debug_run_time: print(
-        f'DEBUG: ** {t2 - t1:4.4f} seconds elapsed for "beginning part" in "analyze_single_frame" **')
+    # if printing_run_time and debug_run_time: print(
+    #     f'DEBUG: ** {t2 - t1:4.4f} seconds elapsed for "beginning part" in "analyze_single_frame" **')
 
     # =========================================#
     #              Detecting                  #
@@ -1826,8 +1826,8 @@ def analyze_single_frame(mat, mat_raw, imgName, i,  # data for this frame
         meanPositions = []
         polygons = []
     if printing_run_time and debug_run_time: t2 = time.time()
-    if printing_run_time and debug_run_time: print(
-        f'DEBUG: ** {t2 - t1:4.4f} seconds elapsed for "Detecting" in "analyze_single_frame" **')
+    # if printing_run_time and debug_run_time: print(
+    #     f'DEBUG: ** {t2 - t1:4.4f} seconds elapsed for "Detecting" in "analyze_single_frame" **')
         
     # if detect_type == 'hot': print('detections: {}'.format(meanPositions))   #debug_cw
 
@@ -1852,8 +1852,8 @@ def analyze_single_frame(mat, mat_raw, imgName, i,  # data for this frame
         if len(records['trackingDict']) > 0:
             currentAsKey = {route['current']: start for start, route in records['trackingDict'].items()}
         if printing_run_time and debug_run_time: t4 = time.time()
-        if printing_run_time and debug_run_time: print(
-            f'DEBUG: === {t4 - t3:4.4f} seconds elapsed for "build a lookup dict" in "Tracking" ===')
+        # if printing_run_time and debug_run_time: print(
+        #    f'DEBUG: === {t4 - t3:4.4f} seconds elapsed for "build a lookup dict" in "Tracking" ===')
 
         if i == 0:
             pairs, outFromLastFrame = [], []
@@ -1889,8 +1889,8 @@ def analyze_single_frame(mat, mat_raw, imgName, i,  # data for this frame
                                                                                     meanPositions_c, vdirections,
                                                                                     eta=momentum_eta)
                 if printing_run_time and debug_run_time: t4 = time.time()
-                if printing_run_time and debug_run_time: print(
-                    f'DEBUG: === {t4 - t3:4.4f} seconds elapsed for "reflecting_distance" in "Tracking" ===')
+                # if printing_run_time and debug_run_time: print(
+                #     f'DEBUG: === {t4 - t3:4.4f} seconds elapsed for "reflecting_distance" in "Tracking" ===')
                 if printing_run_time and debug_run_time: t3 = time.time()
                 P, indicesMatrix = indices_allpeople_with_allpeople_in_two_frames(meanPositions_b, meanPositions_c,
                                                                                   meanPositions_a, printAuxFlag=False,

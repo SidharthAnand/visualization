@@ -2,13 +2,14 @@ import argparse
 import numpy as np
 
 
-def unify(data_path, label_path=None):
-    if "lying_" in data_path:
-        pose = 2
-    elif "standing_" in data_path:
-        pose = 1
-    else:
-        pose = 0
+def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0):
+    if num_in_frame == 1:
+        if "lying_" in data_path:
+            left = right = 2
+        elif "standing_" in data_path:
+            left = right = 1
+        else:
+            left = right = 0
     data = open(data_path, "r").readlines()
     if len(data) == 1:
         try:
@@ -78,8 +79,13 @@ def unify(data_path, label_path=None):
                 width = np.abs(box[1][0] - box[0][0])
                 height = np.abs(box[1][1] - box[0][1])
                 formatted_boxes.append([x_center, y_center, width, height])
-            line_out["bbox"] = formatted_boxes
-            line_out["category_id"] = [pose] * len(boxes)
+            line_out["bbox"] = formatted_boxes.sort(key=lambda x: x[0])
+            if num_in_frame == 1:
+                line_out["category_id"] = [left] * len(boxes)
+            elif num_in_frame == 2:
+                line_out["category_id"] = [left, right]
+            else:
+                raise ValueError
         text_lines_out.append(str(line_out) + "\n")
     with open(unified_path, "a+") as f:
         f.writelines(text_lines_out)
@@ -89,10 +95,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d")
     parser.add_argument("-l")
+    parser.add_argument("-p", default="2")
+    parser.add_argument("-left", default="0")
+    parser.add_argument("-right", default="0")
     args = parser.parse_args()
+    in_frame = eval(args.p)
+    left = eval(args.left)
+    right = eval(args.right)
     d = args.d
     l = args.l
-    unify(d, l)
+    unify(d, l, num_in_frame=in_frame, left=left, right=right)
 
 
 if __name__ == "__main__":
