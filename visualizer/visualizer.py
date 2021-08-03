@@ -15,7 +15,7 @@ max_hue = (240 * 0.00277777777777)
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
-               data_topic=None, mqtt_address=None, label=False):
+               data_topic=None, mqtt_address=None, label=False, mac="00-17-0d-00-00-70-b9-e3"):
     global playback
     global text_line
     global data_queue
@@ -28,8 +28,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     global timestamp
     global det_out_file
     global times
+    global vizMac
     timestamp = time.time()
-
+    vizMac = mac
     client = paho.Client()
     pause = label
 
@@ -463,7 +464,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
 
 def grayscale(im, lo=70, hi=110):
-    im = ((255 / (hi - lo)) * im) - lo
+    im = 255 * ((im - lo) / (hi - lo) )# ((255 / (hi - lo)) * im) - lo
     w, h = im.shape
     ret = np.empty((w, h, 3), dtype=np.uint8)
     ret[:, :, 2] = ret[:, :, 1] = ret[:, :, 0] = im
@@ -601,6 +602,7 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
     global sensor_timer
     global det_buffer
     global timestamp
+    global vizMac
 
     bufferMQ = []
     det_buffer = []
@@ -627,9 +629,10 @@ def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
                 if message['name'] == 'notifData':
                     try: timestamp = message["fields"]["timestamp"]
                     except: timestamp = message["timestamp"]
-                    data_queue.append(message)
-                    bbs = network(message)
-                    if bbs: detection_queue.append(bbs)
+                    if vizMac == message["fields"]["macAddress"]:
+                        data_queue.append(message)
+                        bbs = network(message)
+                        if bbs: detection_queue.append(bbs)
 
         except Exception as e:
             print('\n========================================================================')
@@ -662,6 +665,7 @@ def main():
     parser.add_argument("-fps", default="8")
     parser.add_argument("-sz", default="600", help="Size (in pixels) of data render.")
     parser.add_argument("-lbl", default="f")
+    parser.add_argument("-mac", default="xxx")
 
     args = parser.parse_args()
 
@@ -670,11 +674,12 @@ def main():
     topic = args.mqdi if args.mqdi else None
     address = args.mqba if args.mqba else None
     fps = eval(args.fps)
+    mac = args.mac
     aspect_ratio = (eval(args.sz), eval(args.sz))
     live = (not path) and (len(topic) > 0)
     label = (args.lbl == "t")
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
-               label=label, detection_path=det_path)
+               label=label, detection_path=det_path, mac=mac)
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",
