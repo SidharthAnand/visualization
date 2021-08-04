@@ -2059,7 +2059,7 @@ def analyze_single_frame(mat, mat_raw, imgName, i,  # data for this frame
             minXCoord = (minX - x_start)/(cell_size*8)
             minYCoord = (minY - y_start)/(cell_size*8)
             polysize = (maxXCoord - minXCoord)*(maxYCoord - minYCoord)
-            if polysize > 0.05:
+            if polysize > 0.02:
                 saving_bb_list.append([[minXCoord, minYCoord], [maxXCoord, maxYCoord]])
         global bb_save
         saving_dict = {"bounding box": saving_bb_list,"timestamp":timestamp,"ID": deviceId}

@@ -79,7 +79,9 @@ def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0):
                 width = np.abs(box[1][0] - box[0][0])
                 height = np.abs(box[1][1] - box[0][1])
                 formatted_boxes.append([x_center, y_center, width, height])
-            line_out["bbox"] = formatted_boxes.sort(key=lambda x: x[0])
+            if formatted_boxes:
+                formatted_boxes.sort(key=lambda x: x[0])
+            line_out["bbox"] = formatted_boxes
             if num_in_frame == 1:
                 line_out["category_id"] = [left] * len(boxes)
             elif num_in_frame == 2:

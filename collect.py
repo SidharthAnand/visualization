@@ -87,6 +87,15 @@ def collect_data(mqtt_address, data_topic, data_path_out, period=10, mac="", lef
             packet = data_queue.popleft()
             if eval(packet)["fields"]["macAddress"] != mac:
                 break
+            if mac == "00-17-0d-00-00-70-b9-e3":
+                evaluated = eval(packet)
+                data = eval(packet)["fields"]["data"]
+                data = np.asarray(data)
+                data = data.T
+                # data = np.asarray([r[::-1] for r in data])
+                data = data.tolist()
+                evaluated["fields"]["data"] = data
+                packet = str(evaluated)
             lines.append(packet)
             f.write(packet + "\n")
         i = time.time()

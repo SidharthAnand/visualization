@@ -128,7 +128,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     if not live:
         assert data_path is not None
         with open(data_path, "r") as f:
-            text = f.readlines()[0]
+            text = f.readlines()
+            if type(eval(text[0])) is tuple:
+                text = text[0]
         if detection_path:
             with open(detection_path, "r") as f:
                 detection_text = f.readlines()
@@ -398,15 +400,24 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 data = packet["fields"]["data"][6:-2]
                 data = np.array(data)
             elif len(packet["fields"]["data"]) == 32:
-                data = packet["fields"]["data"] * 4
+                if type(packet["fields"]["data"]) is list:
+                    data = [[x*4 for x in y] for y in packet["fields"]["data"]]
+                else:
+                    data = packet["fields"]["data"] * 4
             elif len(packet["fields"]["data"]) == 74:
                 data = packet["fields"]["data"][6:-4]
                 data = np.array(data)
             else:
                 data = np.array(packet["fields"]["data"])
-            # print(len(packet["fields"]["data"]))
-            h = int(np.sqrt(data.size))
+            try:
+                h = int(np.sqrt(data.size))
+            except:
+                data = np.asarray(data)
+                h = int(np.sqrt(data.size))
             data = data.reshape((h, h))
+            if mac == "00-17-0d-00-00-70-b9-e3":
+                data = data.T
+            #     data = np.asarray([r[::-1] for r in data])
             surf = pygame.surfarray.make_surface(color(data, low_bound, high_bound))
             surf = pygame.transform.scale(surf, (box, box))
             transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
@@ -524,10 +535,13 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             line_check = eval(text[text_line])
         except Exception as e:
             parse_array = True
-            text = eval(text_full)
+            try: text = eval(text_full)
+            except: text = text_full
             text_length = len(text)
             array = lambda x: np.asarray(x)
-            if text[text_line][0] == "b": text[text_line] = str(text[text_line][3:-3])
+            try:
+                if text[text_line][0] == "b": text[text_line] = str(text[text_line][3:-3])
+            except: pass
             try:
                 line_check = eval(text[text_line])[0]
             except:
@@ -536,9 +550,10 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
         if line_check['name'] == "notifData":
             realtime = line_check['timestamp']
             try:
-                timestamp = line_check['fields']['utcSecs']
+                timestamp = line_check['timestamp'] / 1000
+                 #print(datetime.fromtimestamp(timestamp))
             except KeyError:
-                timestamp = line_check['timestamp']
+                timestamp = line_check['fields']['utcSecs']
             id = line_check['fields']['macAddress']
         else:
             text_line += 1
@@ -547,16 +562,19 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             detections_current = det_text[last_detection_line:]
             det_index = 0
             try:
-                time_curr = eval(detections_current[det_index])["timestamp"]
+                time_curr = eval(detections_current[det_index])["timestamp"] / 1000
+                # print(timestamp, time_curr)
                 while time_curr <= timestamp:
+                    # print(timestamp, time_curr)
                     if time_curr == timestamp:
                         detection_queue.append(eval(detections_current[det_index])["bounding box"])
                         det_packet_curr = eval(detections_current[det_index])
                         det_curr = det_index
+                        # print(det_packet_curr)
                         break
                     else:
                         det_index += 1
-                        time_curr = eval(detections_current[det_index])["timestamp"]
+                        time_curr = eval(detections_current[det_index])["timestamp"] / 1000
             except IndexError:
                 pass
         else:
