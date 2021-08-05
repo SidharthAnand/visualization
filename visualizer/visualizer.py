@@ -71,10 +71,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     except FileNotFoundError:
         font = pygame.font.Font('font/Consola.ttf', font_size_small)
         title_font = pygame.font.Font('font/Consola.ttf', font_size_large)
-    if not live:
-        cap = data_path
-    else:
-        cap = data_topic
+    if not live: cap = data_path
+    else: cap = data_topic
     pygame.display.set_caption(f'Butlr Data Visualization -- {cap}')
     if scheme == 'thermal':
         color = lambda x, y, z: thermal(x, y, z)
@@ -131,11 +129,12 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             text = f.readlines()
             if type(eval(text[0])) is tuple:
                 text = text[0]
-        if detection_path:
+        if detection_path and not unified:
             with open(detection_path, "r") as f:
                 detection_text = f.readlines()
             det_out_file = detection_text
-            print(len(det_out_file))
+        elif unified:
+            det_out_file = text.copy()
         else:
             detection_text = None
             det_out_file = []
@@ -296,7 +295,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         if len(points) == 2:
                             # print(det_out_file)
                             new_boxes.append([p[::-1] for p in points])
-                            if detection_path:
+                            if detection_path and not unified:
                                 try:
                                     det_line = eval(det_out_file[det_curr])
                                     if det_line["timestamp"] == timestamp:
@@ -307,16 +306,33 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
                                     det_out_file.insert(det_curr, str(current_packet))
                                 bbs = current_packet["bounding box"]
-                            else:
+                            elif not detection_path and not unified:
                                 bbs = times[timestamp]
+                            else:
+                                assert not detection_path and unified
+                                full_packet = text[text_line]
+                                bbs = eval(full_packet)["bbox"]
+                                boxes_out = []
+                                for b in new_boxes:
+                                    x_center = (b[1][0] + b[0][0]) * 0.5
+                                    y_center = (b[1][1] + b[0][1]) * 0.5
+                                    b_width = np.abs(b[1][0] - b[0][0])
+                                    b_height = np.abs(b[1][1] - b[0][1])
+                                    boxes_out.append([x_center, y_center, b_width, b_height])
+                                new_boxes = boxes_out
 
                             bbs.extend(new_boxes)
-                            if detection_path:
+                            if detection_path and not unified:
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
                                                               "ID": sensor_mac})
-                            else:
+                            elif not detection_path and not unified:
                                 times[timestamp] = bbs
+                            elif not detection_path and unified:
+                                new_line = eval(text[text_line])
+                                new_line["bbox"] = bbs
+                                text[text_line] = str(new_line)
+
                             points = []
                             new_boxes = []
 
@@ -350,14 +366,17 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             color_on = True
                     elif event.ui_element == quit_button:
                         if label:
-                            if detection_path:
+                            if detection_path and not unified:
                                 det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
                                 with open(edited_detection_path, "a+") as f:
                                    f.writelines(det_out_file)
-                            else:
+                            elif not detection_path and not unified:
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
                                 with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
+                            else:
+                                with open(data_path[:-4]+"_EDITED.txt", "w") as f:
+                                    f.writelines(text)
                         running = False
                     elif not live and event.ui_element == play_button:
                         if not label_condiition:
@@ -382,15 +401,19 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     elif label_condiition and event.ui_element == next_button:
                         try: text_line += 1
                         except IndexError: text_line = -1
-
                     elif label_condiition and event.ui_element == prev_button:
                         text_line = max(0, text_line - 1)
                     elif label_condiition and event.ui_element == clear_button:
-                        if detection_path:
+                        if detection_path and not unified:
                             sensor = eval(det_out_file[det_curr])["ID"]
                             det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
-                        else:
+                        elif not detection_path and not unified:
                             times[timestamp] = []
+                        else:
+                            assert unified and not detection_path
+                            cleared = eval(text[text_line])
+                            cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
+                            text[text_line] = str(cleared)
                         transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
                         transparent_surface = transparent_surface.convert_alpha()
                         disp.blit(surf, (box // 20, box // 20))
