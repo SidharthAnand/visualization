@@ -15,7 +15,7 @@ max_hue = (240 * 0.00277777777777)
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
-               data_topic=None, mqtt_address=None, label=False, mac="00-17-0d-00-00-70-b9-e3"):
+               data_topic=None, mqtt_address=None, label=False, mac="00-17-0d-00-00-70-b9-e3", unified=False):
     global playback
     global text_line
     global data_queue
@@ -135,6 +135,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             with open(detection_path, "r") as f:
                 detection_text = f.readlines()
             det_out_file = detection_text
+            print(len(det_out_file))
         else:
             detection_text = None
             det_out_file = []
@@ -149,7 +150,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             manager=manager
         )
         text_line = 0
-        _thread.start_new_thread(stream_text_data, (text, det_out_file, fps, 0, np.inf))
+        if not unified:
+            _thread.start_new_thread(stream_text_data, (text, det_out_file, fps, 0, np.inf))
+        else:
+            _thread.start_new_thread(stream_unified_text, (text, fps))
         play_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect((plb * width * 0.8, aspect[1] * 0.99, aspect[1] // 6, aspect[1] // 20)),
             text="Play",
@@ -213,7 +217,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     contrast_text = title_font.render("Adjust Contrast", True, white)
     contrast_rect = contrast_text.get_rect()
     contrast_rect.topleft = (int(width * br), int(height // 20))
-    time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
+    try:
+        time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
+    except ValueError:
+        time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp / 1000)}", True, white)
     time_rect = time_text.get_rect()
     time_rect.topleft = ((aspect_ratio[0] // 50), (aspect_ratio[1] // 50))
     low_bound_text = font.render("Low", True, white)
@@ -395,23 +402,28 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
         while len(data_queue) >= 1:
             packet = data_queue.popleft()
-            sensor_mac = packet["fields"]["macAddress"]
-            if len(packet["fields"]["data"]) == 72:
-                data = packet["fields"]["data"][6:-2]
-                data = np.array(data)
-            elif len(packet["fields"]["data"]) == 32:
-                if type(packet["fields"]["data"]) is list:
-                    data = [[x*4 for x in y] for y in packet["fields"]["data"]]
+            if not unified:
+                sensor_mac = packet["fields"]["macAddress"]
+                if len(packet["fields"]["data"]) == 72:
+                    data = packet["fields"]["data"][6:-2]
+                    data = np.array(data)
+                elif len(packet["fields"]["data"]) == 32:
+                    if type(packet["fields"]["data"]) is list:
+                        data = [[x*4 for x in y] for y in packet["fields"]["data"]]
+                    else:
+                        data = packet["fields"]["data"] * 4
+                elif len(packet["fields"]["data"]) == 74:
+                    data = packet["fields"]["data"][6:-4]
+                    data = np.array(data)
                 else:
-                    data = packet["fields"]["data"] * 4
-            elif len(packet["fields"]["data"]) == 74:
-                data = packet["fields"]["data"][6:-4]
-                data = np.array(data)
+                    data = np.array(packet["fields"]["data"])
+                try:
+                    h = int(np.sqrt(data.size))
+                except:
+                    data = np.asarray(data)
+                    h = int(np.sqrt(data.size))
             else:
-                data = np.array(packet["fields"]["data"])
-            try:
-                h = int(np.sqrt(data.size))
-            except:
+                data = packet
                 data = np.asarray(data)
                 h = int(np.sqrt(data.size))
             data = data.reshape((h, h))
@@ -612,6 +624,41 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
         time.sleep(1 / fps)
 
 
+def stream_unified_text(text_lines, fps):
+    global playback
+    global text_line
+    global data_queue
+    global detection_queue
+    global det_packet_curr
+    global det_index
+    global det_curr
+    global text_length
+    global pause
+    global timestamp
+    global times
+
+    last_detection_line = 0
+    text_length = len(text_lines)
+    while True:
+        text = text_lines[text_line]
+        text = eval(text)
+        timestamp = text["timestamp"]
+        class_labels = text["category_id"]
+        data = text["image"]
+        boxes = text["bbox"]
+        sensor = text["mac_address"]
+        data_queue.append(data)
+        out_boxes = [[[b[0] - (0.5 * b[2]), b[1] - (0.5 * b[3])],
+                      [b[0] + (0.5 * b[2]), b[1] + (0.5 * b[3])]] for b in boxes]
+        detection_queue.append(out_boxes)
+
+        playback.set_current_value(text_line / text_length)
+        playback.update(1 / 100)
+        if not pause:
+            text_line += 1
+        time.sleep(1 / fps)
+
+
 def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
     global data_queue
     global detection_queue
@@ -684,6 +731,7 @@ def main():
     parser.add_argument("-sz", default="600", help="Size (in pixels) of data render.")
     parser.add_argument("-lbl", default="f")
     parser.add_argument("-mac", default="xxx")
+    parser.add_argument("-uni", default="f")
 
     args = parser.parse_args()
 
@@ -693,11 +741,12 @@ def main():
     address = args.mqba if args.mqba else None
     fps = eval(args.fps)
     mac = args.mac
+    unified = args.uni == "t"
     aspect_ratio = (eval(args.sz), eval(args.sz))
     live = (not path) and (len(topic) > 0)
     label = (args.lbl == "t")
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
-               label=label, detection_path=det_path, mac=mac)
+               label=label, detection_path=det_path, mac=mac, unified=unified)
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",

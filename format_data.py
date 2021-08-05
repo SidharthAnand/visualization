@@ -58,36 +58,40 @@ def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0):
                 line_out["image"] = [[line_out["image"][8*k + i] for i in range(8)] for k in range(8)]
 
         if label_path:
-            label_line = eval(labels[label_start])
-            label_time = label_line["timestamp"]
-            label_mac = label_line["ID"]
-            boxes = []
-            formatted_boxes = []
-            while label_time <= timestamp:
-                if label_time == timestamp and label_mac == mac:
-                    boxes = label_line['bounding box']
-                    break
-                label_start += 1
-                try:
-                    label_time = eval(labels[label_start])["timestamp"]
-                except IndexError:
-                    label_time = timestamp
-            for box in boxes:
-                # print(box)
-                x_center = (box[1][0] + box[0][0]) * 0.5
-                y_center = (box[1][1] + box[0][1]) * 0.5
-                width = np.abs(box[1][0] - box[0][0])
-                height = np.abs(box[1][1] - box[0][1])
-                formatted_boxes.append([x_center, y_center, width, height])
-            if formatted_boxes:
-                formatted_boxes.sort(key=lambda x: x[0])
-            line_out["bbox"] = formatted_boxes
-            if num_in_frame == 1:
-                line_out["category_id"] = [left] * len(boxes)
-            elif num_in_frame == 2:
-                line_out["category_id"] = [left, right]
-            else:
-                raise ValueError
+            try:
+                label_line = eval(labels[label_start])
+                label_time = label_line["timestamp"]
+                label_mac = label_line["ID"]
+                boxes = []
+                formatted_boxes = []
+                while label_time <= timestamp:
+                    if label_time == timestamp and label_mac == mac:
+                        boxes = label_line['bounding box']
+                        break
+                    else:
+                        label_start += 1
+                        try:
+                            label_time = eval(labels[label_start])["timestamp"]
+                        except IndexError:
+                            label_time = timestamp
+                for box in boxes:
+                    # print(box)
+                    x_center = (box[1][0] + box[0][0]) * 0.5
+                    y_center = (box[1][1] + box[0][1]) * 0.5
+                    width = np.abs(box[1][0] - box[0][0])
+                    height = np.abs(box[1][1] - box[0][1])
+                    formatted_boxes.append([x_center, y_center, width, height])
+                if formatted_boxes:
+                    formatted_boxes.sort(key=lambda x: x[0])
+                line_out["bbox"] = formatted_boxes
+                if num_in_frame == 1:
+                    line_out["category_id"] = [left] * len(boxes)
+                elif num_in_frame == 2:
+                    line_out["category_id"] = [left, right]
+                else:
+                    raise ValueError
+            except IndexError:
+                pass
         text_lines_out.append(str(line_out) + "\n")
     with open(unified_path, "a+") as f:
         f.writelines(text_lines_out)
