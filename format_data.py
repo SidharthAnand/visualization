@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 
 
-def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0):
+def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0, skip=0):
     if num_in_frame == 1:
         if "lying_" in data_path:
             left = right = 2
@@ -93,8 +93,8 @@ def unify(data_path, label_path=None, num_in_frame=2, left=0, right=0):
             except IndexError:
                 pass
         text_lines_out.append(str(line_out) + "\n")
-    with open(unified_path, "a+") as f:
-        f.writelines(text_lines_out)
+    with open(unified_path, "w") as f:
+        f.writelines(text_lines_out[skip:])
 
 
 def main():
@@ -104,13 +104,15 @@ def main():
     parser.add_argument("-p", default="2")
     parser.add_argument("-left", default="0")
     parser.add_argument("-right", default="0")
+    parser.add_argument("-skip", default="0")
     args = parser.parse_args()
     in_frame = eval(args.p)
     left = eval(args.left)
     right = eval(args.right)
+    skip = eval(args.skip)
     d = args.d
     l = args.l
-    unify(d, l, num_in_frame=in_frame, left=left, right=right)
+    unify(d, l, num_in_frame=in_frame, left=left, right=right, skip=skip)
 
 
 if __name__ == "__main__":
