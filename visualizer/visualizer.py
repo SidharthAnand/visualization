@@ -449,6 +449,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 data = packet
                 data = np.asarray(data)
                 h = int(np.sqrt(data.size))
+                if h == 32: data *= 4
             data = data.reshape((h, h))
             if mac == "00-17-0d-00-00-70-b9-e3":
                 data = data.T
