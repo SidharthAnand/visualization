@@ -1,3 +1,4 @@
+import re
 import ast
 import sys
 import time
@@ -322,12 +323,11 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
                                                               "ID": sensor_mac})
-                            elif not detection_path and not unified:
-                                times[timestamp] = bbs
+                            elif not detection_path and not unified: times[timestamp] = bbs
                             elif not detection_path and unified:
                                 new_line = eval(text[text_line])
                                 new_line["bbox"] = bbs
-                                text[text_line] = str(new_line)
+                                text[text_line] = str(new_line) + "\n"
 
                             points = []
                             new_boxes = []
@@ -372,6 +372,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     f.writelines([x + "\n" for x in det_out_file])
                             else:
                                 with open(data_path[:-4]+"_EDITED.txt", "w") as f:
+                                    # print(text[0])
                                     f.writelines(text)
                         running = False
                     elif not live and event.ui_element == play_button:
@@ -409,7 +410,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             assert unified and not detection_path
                             cleared = eval(text[text_line])
                             cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
-                            text[text_line] = str(cleared)
+                            text[text_line] = str(cleared) + "\n"
                         transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
                         transparent_surface = transparent_surface.convert_alpha()
                         disp.blit(surf, (box // 20, box // 20))
