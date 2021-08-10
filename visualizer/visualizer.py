@@ -319,6 +319,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 new_boxes = boxes_out
 
                             bbs.extend(new_boxes)
+                            bbs.sort(key=lambda x: x[0])
                             if detection_path and not unified:
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
@@ -372,7 +373,6 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     f.writelines([x + "\n" for x in det_out_file])
                             else:
                                 with open(data_path[:-4]+"_EDITED.txt", "w") as f:
-                                    # print(text[0])
                                     f.writelines(text)
                         running = False
                     elif not live and event.ui_element == play_button:
