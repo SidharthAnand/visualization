@@ -319,7 +319,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 new_boxes = boxes_out
 
                             bbs.extend(new_boxes)
-                            bbs.sort(key=lambda x: x[0])
+                            bbs.sort(key=lambda p: p[0])
                             if detection_path and not unified:
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
