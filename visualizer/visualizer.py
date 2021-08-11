@@ -16,7 +16,7 @@ max_hue = (240 * 0.00277777777777)
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
-               data_topic=None, mqtt_address=None, label=False, mac="00-17-0d-00-00-70-b9-e3", unified=False):
+               data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False):
     global playback
     global text_line
     global data_queue
@@ -303,6 +303,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
                                     det_out_file.insert(det_curr, str(current_packet))
                                 bbs = current_packet["bounding box"]
+                                # print("yeehaw")
                             elif not detection_path and not unified:
                                 bbs = times[timestamp]
                             else:
@@ -396,8 +397,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             labeling_active = False
                             edit_button.set_text("Edit Bounding Box")
                     elif label_condiition and event.ui_element == next_button:
-                        try: text_line += 1
-                        except IndexError: text_line = -1
+                        text_line += 1
+                        if text_line == text_length:
+                            text_line -= 1
                     elif label_condiition and event.ui_element == prev_button:
                         text_line = max(0, text_line - 1)
                     elif label_condiition and event.ui_element == clear_button:
@@ -575,6 +577,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             try:
                 if text[text_line][0] == "b": text[text_line] = str(text[text_line][3:-3])
             except: pass
+            if text_line >= text_length: text_line = text_length - 1
             try:
                 line_check = eval(text[text_line])[0]
             except:
@@ -583,23 +586,24 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
         if line_check['name'] == "notifData":
             realtime = line_check['timestamp']
             try:
-                timestamp = line_check['timestamp'] / 1000
-                 #print(datetime.fromtimestamp(timestamp))
+                timestamp = line_check['timestamp']
             except KeyError:
                 timestamp = line_check['fields']['utcSecs']
             id = line_check['fields']['macAddress']
         else:
             text_line += 1
+            if text_line == text_length:
+                text_line -= 1
             continue
         if not new_file:
             detections_current = det_text[last_detection_line:]
             det_index = 0
             try:
-                time_curr = eval(detections_current[det_index])["timestamp"] / 1000
-                # print(timestamp, time_curr)
+                time_curr = eval(detections_current[det_index])["timestamp"]
                 while time_curr <= timestamp:
                     # print(timestamp, time_curr)
                     if time_curr == timestamp:
+                        print(det_text[det_curr])
                         detection_queue.append(eval(detections_current[det_index])["bounding box"])
                         det_packet_curr = eval(detections_current[det_index])
                         det_curr = det_index
@@ -607,7 +611,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
                         break
                     else:
                         det_index += 1
-                        time_curr = eval(detections_current[det_index])["timestamp"] / 1000
+                        time_curr = eval(detections_current[det_index])["timestamp"]
             except IndexError:
                 pass
         else:
@@ -642,6 +646,8 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
                     raise
             if not pause:
                 text_line += 1
+                if text_line == text_length:
+                    text_line -= 1
         time.sleep(1 / fps)
 
 
