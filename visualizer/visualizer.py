@@ -1,4 +1,6 @@
 import re
+import os
+from datetime import timedelta
 import ast
 import sys
 import time
@@ -16,7 +18,9 @@ max_hue = (240 * 0.00277777777777)
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
-               data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False):
+               data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False,
+               restream=None, time_start=None, time_end=None, time_offset=None, db=None, hid=None, sensor=None,
+               normalized=None):
     global playback
     global text_line
     global data_queue
@@ -30,10 +34,12 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     global det_out_file
     global times
     global vizMac
+
     timestamp = time.time()
     vizMac = mac
     client = paho.Client()
     pause = label
+    norm = normalized
 
     pygame.init()
 
@@ -55,6 +61,22 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     font_size_large = int(grid[2] // 30)
     det_index = 0
     det_curr = 0
+
+    # error checking for time restream
+    try:
+        if restream:
+            time_offset = float(time_offset)
+    except:
+        print('ERROR: Time offset not valid')
+        quit()
+    if not date_format(time_start) and restream:
+        print("ERROR: Start time in wrong format")
+        quit()
+    elif not date_format(time_end) and time_end is not None and restream:
+        print('ERROR: End time in wrong format')
+        quit()
+
+    is_restream = (restream and (isinstance(time_offset, float)))
 
     if not smaller_size:
         br = 0.88
@@ -125,7 +147,29 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         manager=manager
     )
     if not live:
+
+        if is_restream:
+            time_end = str(time_change(time_start, minutes=time_offset) if time_end is None else time_end)
+
+            output = os.popen(f"restream.py -db {db} -dt sensor_raw -did {sensor} -ts \"{time_start}\" -te \"{time_end}\" -hid {hid} -stt True").readlines()
+
+            stri = ''
+            for x in output:
+                stri += x
+            print(stri)
+
+            try:
+                data_path = output[-2].replace('\n', '')
+                open(data_path)
+            except Exception as e:
+                print('ERROR: Could not make API request. Sensor ID(sensor), Hive ID(hid), or Database(db) might need '
+                      'to be changed')
+                quit()
+
+            # restream_format(data_path)
+
         assert data_path is not None
+
         with open(data_path, "r") as f:
             text = f.readlines()
             if type(eval(text[0])) is tuple:
@@ -140,6 +184,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             detection_text = None
             det_out_file = []
             times = {}
+
         playback = pygame_gui.elements.UIHorizontalSlider(
             relative_rect=pygame.Rect((box // 20,
                                        int(aspect[1] * 1.02),
@@ -219,7 +264,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     contrast_rect.topleft = (int(width * br), int(height // 20))
     try:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
-    except ValueError:
+    except:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp / 1000)}", True, white)
     time_rect = time_text.get_rect()
     time_rect.topleft = ((aspect_ratio[0] // 50), (aspect_ratio[1] // 50))
@@ -267,9 +312,11 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 elif event.key == pygame.K_SPACE:
                     if not label_condiition:
                         pause = not pause
+
                 elif event.key == pygame.K_LEFT: text_line = max(text_line - 100, 0)
+
                 elif event.key == pygame.K_RIGHT:
-                    try: text_line += 100
+                    try: text_line = min(len(data_text) - 1, text_line + 100)
                     except IndexError: text_line = -1
                 elif event.key == pygame.K_c:
                     if color_on:
@@ -302,10 +349,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 except Exception:
                                     current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
                                     det_out_file.insert(det_curr, str(current_packet))
+
                                 bbs = current_packet["bounding box"]
                                 # print("yeehaw")
+
                             elif not detection_path and not unified:
                                 bbs = times[timestamp]
+
                             else:
                                 assert not detection_path and unified
                                 full_packet = text[text_line]
@@ -363,11 +413,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             color = lambda x, y, z: thermal(x, y, z)
                             color_on = True
                     elif event.ui_element == quit_button:
+
                         if label:
                             if detection_path and not unified:
                                 det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
                                 with open(edited_detection_path, "a+") as f:
                                    f.writelines(det_out_file)
+
                             elif not detection_path and not unified:
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
                                 with open(edited_detection_path, "a+") as f:
@@ -375,6 +427,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             else:
                                 with open(data_path[:-4]+"_EDITED.txt", "w") as f:
                                     f.writelines(text)
+
                         running = False
                     elif not live and event.ui_element == play_button:
                         if not label_condiition:
@@ -383,7 +436,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         pause = True
                     elif not live and event.ui_element == ff:
                         try:
-                            text_line += 100
+                            text_line = min(len(data_text) - 1, text_line + 100)
+
                         except IndexError:
                             text_line = -1
                     elif not live and event.ui_element == rw:
@@ -402,6 +456,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             text_line -= 1
                     elif label_condiition and event.ui_element == prev_button:
                         text_line = max(0, text_line - 1)
+
                     elif label_condiition and event.ui_element == clear_button:
                         if detection_path and not unified:
                             sensor = eval(det_out_file[det_curr])["ID"]
@@ -546,6 +601,7 @@ def thermal(im, lo=70, hi=110):
 def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global playback
     global text_line
+    global data_text
     global data_queue
     global detection_queue
     global det_packet_curr
@@ -643,12 +699,18 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             if time_check - last_time >= 1 / (4 * fps):
                 data_queue.append(line_check)
                 if realtime >= end_time:
-                    raise
+                    raise e
             if not pause:
                 text_line += 1
                 if text_line == text_length:
                     text_line -= 1
         time.sleep(1 / fps)
+
+        if text_line > len(text) - 1:
+            text_line = len(text) - 1
+            pause = True
+
+        data_text = text
 
 
 def stream_unified_text(text_lines, fps):
@@ -688,6 +750,12 @@ def stream_unified_text(text_lines, fps):
         if not pause:
             text_line += 1
         time.sleep(1 / fps)
+
+        if text_line > len(text) - 1:
+            text_line =len(text)-1
+            pause = True
+
+        data_text = text
 
 
 def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
@@ -750,6 +818,35 @@ def network(message):
     return []
 
 
+def time_change(date, hours=0, minutes=0):
+    return datetime.strptime(date, '%Y-%m-%d %H:%M:%S') + timedelta(hours=hours, minutes=minutes)
+
+
+def date_format(date, format='%Y-%m-%d %H:%M:%S'):
+    try:
+        date_obj = datetime.strptime(date, format)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def restream_format(path):
+    with open(path, 'r') as f:
+        text = f.readlines()
+
+    out_txt = '[['
+
+    for x in text:
+        x = x.rstrip()
+        x = x.replace('\'', '"')
+        out_txt += 'b\'' + x + '\', '
+
+    out_txt = out_txt[:-2] + ']]'
+
+    with open(path, 'w') as f:
+        f.write(out_txt)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-path", default="", help="Path to saved data (in .txt format)")
@@ -764,6 +861,16 @@ def main():
     parser.add_argument("-mac", default="xxx")
     parser.add_argument("-uni", default="f")
 
+    parser.add_argument("-restream", default="f")
+    parser.add_argument("-ts", default="", help="Start time for restream")
+    parser.add_argument("-te", default="", help="End time for restream")
+    parser.add_argument("-to", default="", help="Offset time if no end time for restream")
+    parser.add_argument("-hid", default="", help="Hive id for restream")
+    parser.add_argument("-sensor", default="", help="Sensor id(mac address)for restream")
+    parser.add_argument("-db", default="", help="Database for for restream")
+
+    parser.add_argument("-normalized", default="f", help="If the data is normalized or not")
+
     args = parser.parse_args()
 
     path = args.path if args.path else None
@@ -774,10 +881,28 @@ def main():
     mac = args.mac
     unified = args.uni == "t"
     aspect_ratio = (eval(args.sz), eval(args.sz))
-    live = (not path) and (len(topic) > 0)
+
+    try:
+        live = (not path) and (len(topic) > 0) and (len(address) > 0)
+    except:
+        live = False
+
     label = (args.lbl == "t")
+
+    # for restream
+    ts = args.ts if args.ts else None
+    te = args.te if args.te else None
+    to = args.to if args.to else None
+    hid = args.hid if args.hid else None
+    db = args.db if args.db else None
+    sensor = args.sensor if args.sensor else None
+    restream = (args.restream == 't')
+
+    normal = (args.normalized == 't')
+
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
-               label=label, detection_path=det_path, mac=mac, unified=unified)
+               label=label, detection_path=det_path, mac=mac, unified=unified, restream=restream, time_start=ts, time_offset=to, time_end=te,
+               hid=hid, sensor=sensor, db=db, normalized=normal)
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",
