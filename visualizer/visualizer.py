@@ -1,3 +1,4 @@
+import json
 import re
 import os
 from datetime import timedelta
@@ -77,6 +78,14 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         quit()
 
     is_restream = (restream and (isinstance(time_offset, float)))
+
+    category_options = ['Uncertain', 'Sitting', 'Standing',
+                        'Lying Down']  # change the title for whether the person is unsure
+    category_ids = [-1, 0, 1, 2]
+    selected_pos = -1
+    category_options = ['Uncertain', 'Sitting', 'Standing',
+                        'Lying Down']  # change the title for whether the person is unsure
+    category_ids = [-1, 0, 1, 2]
 
     if not smaller_size:
         br = 0.88
@@ -246,6 +255,15 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 text="Clear",
                 manager=manager
             )
+
+            pos_drop = pygame_gui.elements.UIDropDownMenu(
+                relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                options_list=category_options,
+                starting_option='Position',
+                manager=manager
+            )
+
+            pos_drop.visible = False
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
@@ -279,6 +297,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     transparent_surface = transparent_surface.convert_alpha()
     labeling_active = False
     texts = []
+    bb_lbl = []
+    bb_dict = {}
     points = []
     new_boxes = []
     sensor_mac = ""
@@ -289,11 +309,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         if label and labeling_active:
             clear_button.visible = True
             next_button.visible = True
+            pos_drop.visible = True
             prev_button.visible = True
         elif label and not labeling_active:
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
+            pos_drop.visible = False
 
         label_condiition = label and labeling_active and (not live)
 
@@ -338,7 +360,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                        np.around((y - box//20) / box, 4)])
                         if len(points) == 2:
                             # print(det_out_file)
+                            bb_lbl.append(selected_pos)
                             new_boxes.append([p[::-1] for p in points])
+
                             if detection_path and not unified:
                                 try:
                                     det_line = eval(det_out_file[det_curr])
@@ -369,19 +393,41 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     boxes_out.append([x_center, y_center, b_width, b_height])
                                 new_boxes = boxes_out
 
+                            try:
+                                if len(bb_dict[timestamp]) >= 0:
+                                    bb_dict[timestamp].extend(bb_lbl)
+                                    # print(bb_dict[timestamp])
+                            except:
+                                bb_dict[timestamp] = bb_lbl
+                            # print(bb_lbl)
+                            # if timestamp in bb_dict.keys():
+                            #     bb_dict[timestamp] = bb_dict[timestamp].extend(bb_lbl)
+                            # else:
+                            #     bb_dict[timestamp] = bb_lbl
+                            # print(new_boxes)
+
                             bbs.extend(new_boxes)
-                            bbs.sort(key=lambda p: p[0])
+                            bbs, bb_dict[timestamp] = (list(t) for t in zip(*sorted(zip(bbs, bb_dict[timestamp]))))
+
+                            # bbs.sort3(key=lambda p: p[0]) # sort based on x coordinate of first element
+                            # print(bbs, bb_lbl)
+                            # print([x for _, x in sorted(zip(bb_lbl, bbs), key=lambda pair: pair[0])])
+
                             if detection_path and not unified:
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
                                                               "ID": sensor_mac})
-                            elif not detection_path and not unified: times[timestamp] = bbs
+                            elif not detection_path and not unified:
+                                times[timestamp] = bbs
+                                # bb_dict[timestamp] = bb_lbl
+
                             elif not detection_path and unified:
                                 new_line = eval(text[text_line])
                                 new_line["bbox"] = bbs
                                 text[text_line] = str(new_line) + "\n"
 
                             points = []
+                            bb_lbl = []
                             new_boxes = []
 
             if event.type == pygame.USEREVENT:
@@ -404,6 +450,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         high_rect = contrast_high_text.get_rect()
                         high_rect.topleft = ((aspect[0] - (box // 16)), int(aspect[1] // 8.75))  # 8.75
                         disp.blit(contrast_high_text, high_rect)
+                elif event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED and label_condiition:
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
                 elif event.user_type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == color_toggle:
                         if color_on:
@@ -420,8 +468,27 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 with open(edited_detection_path, "a+") as f:
                                    f.writelines(det_out_file)
 
+                            # Old format
+                            # elif not detection_path and not unified:
+                            #     det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
+                            #     with open(edited_detection_path, "a+") as f:
+                            #         f.writelines([x + "\n" for x in det_out_file])
+
+                            # New format
                             elif not detection_path and not unified:
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
+                                det_out_file = []
+                                for ind in range(len(times.keys())):
+                                    b = list(times.values())[ind]
+                                    t = list(times.keys())[ind]
+                                    p = list(bb_dict.values())[ind]
+                                    if b:
+                                        b = list(b)[0]
+                                        cx = (b[0][0]+b[1][0])/2
+                                        cy = (b[0][1]+b[1][1])/2
+                                        w = np.abs(b[1][0] - b[0][0])
+                                        h = np.abs(b[1][1] - b[0][1])
+                                        det_out_file.append(str(json.dumps({"image": data.tolist(), "bbox": [cx, cy, w, h], "category_id": p, "timestamp": t, "mac_address": sensor_mac, "normalized": norm})))
                                 with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
                             else:
@@ -463,11 +530,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
                         elif not detection_path and not unified:
                             times[timestamp] = []
+                            bb_dict[timestamp] = []
                         else:
                             assert unified and not detection_path
                             cleared = eval(text[text_line])
                             cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
                             text[text_line] = str(cleared) + "\n"
+
                         transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
                         transparent_surface = transparent_surface.convert_alpha()
                         disp.blit(surf, (box // 20, box // 20))
@@ -504,6 +573,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 data = np.asarray(data)
                 h = int(np.sqrt(data.size))
                 if h == 32: data *= 4
+            img = data
             data = data.reshape((h, h))
             if mac == "00-17-0d-00-00-70-b9-e3":
                 data = data.T
@@ -524,6 +594,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             else:
                 rect_color = red
 
+            cnt = 0
             for b in boxes:
                 z = aspect_ratio[0]
                 if not label:
@@ -543,10 +614,19 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
                 else:
                     b = [[z*k for k in d] for d in b]
-                    box_height = np.abs(b[1][0] - b[0][0])
-                    box_width = np.abs(b[1][1] - b[0][1])
+                    box_height = b[1][0] - b[0][0]
+                    box_width = b[1][1] - b[0][1]
                     bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
+
+                    pose = f'{str(cnt)}-{category_options[category_ids.index(bb_dict[timestamp][cnt])]}'
+                    pose_text = title_font.render(pose, True, black)
+                    text_rect = pose_text.get_rect()
+                    # text_rect.center = (b[0][0] + ((b[1][0]-b[0][0]) // 2) + (aspect_ratio[0] // 20), b[0][1] - 10 + (aspect_ratio[1] // 20))
+
+                    texts.append((pose_text, bb))
+                    cnt += 1
                 pygame.draw.rect(transparent_surface, rect_color, bb, 2)
+
 
         disp.blit(transparent_surface, (box // 20, box // 20))
         for t in texts: disp.blit(t[0], t[1])
