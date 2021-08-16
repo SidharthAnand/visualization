@@ -366,39 +366,19 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             points.append([np.around((x - box//20) / box, 4),
                                            np.around((y - box//20) / box, 4)])
                         else:
-                            if h == 8:
+                            if h == 8 or h == 32:
                                 possible_coord = []
                                 pos_co = 0
                                 xx = x
                                 for x in range(int(h)+1):
                                     possible_coord.append(pos_co)
                                     pos_co += (box/h)
-                                print(possible_coord)
-                                print(len(possible_coord))
                                 pt_x = (xx - (box//20))
                                 pt_y = (y - box//20)
                                 pt_x = possible_coord[closest(possible_coord, pt_x)]
                                 pt_y = possible_coord[closest(possible_coord, pt_y)]
                                 pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
-                                print(f'x {x} y {y} box {box} pt_x {pt_x} pt_y {pt_y}')
                                 points.append(pt)
-                            elif h == 32:
-                                possible_coord = []
-                                pos_co = 0
-                                xx = x
-                                for x in range(int(h)+1):
-                                    possible_coord.append(pos_co)
-                                    pos_co += (box/h)
-                                print(possible_coord)
-                                print(len(possible_coord))
-                                pt_x = (xx - (box//20))
-                                pt_y = (y - box//20)
-                                pt_x = possible_coord[closest(possible_coord, pt_x)]
-                                pt_y = possible_coord[closest(possible_coord, pt_y)]
-                                pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
-                                print(f'x {x} y {y} box {box} pt_x {pt_x} pt_y {pt_y}')
-                                points.append(pt)
-                            pass
                         if len(points) == 2:
                             # print(det_out_file)
                             bb_lbl.append(selected_pos)
