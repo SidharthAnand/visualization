@@ -298,7 +298,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     labeling_active = False
     texts = []
     bb_lbl = []
-    bb_dict = {}
+    bb_lbl_dict = {}
     points = []
     new_boxes = []
     sensor_mac = ""
@@ -394,32 +394,30 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 new_boxes = boxes_out
 
                             try:
-                                if len(bb_dict[timestamp]) >= 0:
-                                    bb_dict[timestamp].extend(bb_lbl)
-                                    # print(bb_dict[timestamp])
+                                if len(bb_lbl_dict[timestamp]) >= 0:
+                                    bb_lbl_dict[timestamp].extend(bb_lbl)
+                                    # print(bb_lbl_dict[timestamp])
                             except:
-                                bb_dict[timestamp] = bb_lbl
-                            # print(bb_lbl)
-                            # if timestamp in bb_dict.keys():
-                            #     bb_dict[timestamp] = bb_dict[timestamp].extend(bb_lbl)
-                            # else:
-                            #     bb_dict[timestamp] = bb_lbl
-                            # print(new_boxes)
+                                bb_lbl_dict[timestamp] = bb_lbl
 
                             bbs.extend(new_boxes)
-                            bbs, bb_dict[timestamp] = (list(t) for t in zip(*sorted(zip(bbs, bb_dict[timestamp]))))
+                            bbs, bb_lbl_dict[timestamp] = (list(t) for t in zip(*sorted(zip(bbs, bb_lbl_dict[timestamp]))))
 
                             # bbs.sort3(key=lambda p: p[0]) # sort based on x coordinate of first element
                             # print(bbs, bb_lbl)
                             # print([x for _, x in sorted(zip(bb_lbl, bbs), key=lambda pair: pair[0])])
 
                             if detection_path and not unified:
+                                # temp_lbl = [-1 for x in bbs]
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
                                                               "ID": sensor_mac})
+                                # bb_lbl_dict[timestamp] = str(det_out_file[det_curr]["category_id"])
+                                for det in det_out_file:
+                                    eval(det)
                             elif not detection_path and not unified:
                                 times[timestamp] = bbs
-                                # bb_dict[timestamp] = bb_lbl
+                                # bb_lbl_dict[timestamp] = bb_lbl
 
                             elif not detection_path and unified:
                                 new_line = eval(text[text_line])
@@ -464,9 +462,41 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
                         if label:
                             if detection_path and not unified:
+                                print(bb_lbl_dict)
                                 det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
-                                with open(edited_detection_path, "a+") as f:
-                                   f.writelines(det_out_file)
+                                out = []
+                                for x in det_out_file:
+                                    if eval(x)["bounding box"]:
+                                        # print(eval(x))
+                                        b = list(eval(x)["bounding box"])
+                                        bb_out = []
+                                        for b in b:
+                                            timestamp = str(eval(x)["timestamp"])
+                                            cx = (b[0][0]+b[1][0])/2
+                                            cy = (b[0][1]+b[1][1])/2
+                                            w = np.abs(b[1][0] - b[0][0])
+                                            h = np.abs(b[1][1] - b[0][1])
+                                            bb_out.append([cx, cy, w, h])
+
+                                            try:
+                                                if int(timestamp) in list(bb_lbl_dict.keys()):
+                                                    cat_ids = bb_lbl_dict[int(timestamp)]
+                                                else:
+                                                    cat_ids = []
+                                            except:
+                                                if float(timestamp) in list(bb_lbl_dict.keys()):
+                                                    cat_ids = bb_lbl_dict[float(timestamp)]
+                                                else:
+                                                    cat_ids = []
+                                        out.append(str(json.dumps({"image": data.tolist(),
+                                                                   "bbox": bb_out,
+                                                                   "category_id": cat_ids,
+                                                                   "timestamp": timestamp,
+                                                                   "mac_address": sensor_mac,
+                                                                   "normalized": norm})))
+                                out.pop(-1)
+                                with open(edited_detection_path, "w") as f:
+                                    f.write('\n'.join(out))
 
                             # Old format
                             # elif not detection_path and not unified:
@@ -478,17 +508,23 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             elif not detection_path and not unified:
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
                                 det_out_file = []
+
                                 for ind in range(len(times.keys())):
                                     b = list(times.values())[ind]
                                     t = list(times.keys())[ind]
-                                    p = list(bb_dict.values())[ind]
+                                    p = list(bb_lbl_dict.values())[ind]
                                     if b:
-                                        b = list(b)[0]
-                                        cx = (b[0][0]+b[1][0])/2
-                                        cy = (b[0][1]+b[1][1])/2
-                                        w = np.abs(b[1][0] - b[0][0])
-                                        h = np.abs(b[1][1] - b[0][1])
-                                        det_out_file.append(str(json.dumps({"image": data.tolist(), "bbox": [cx, cy, w, h], "category_id": p, "timestamp": t, "mac_address": sensor_mac, "normalized": norm})))
+                                        bb_out = []
+                                        b = list(b)
+                                        for b in b:
+                                            # b = list(b)[0]
+                                            cx = (b[0][0]+b[1][0])/2
+                                            cy = (b[0][1]+b[1][1])/2
+                                            w = np.abs(b[1][0] - b[0][0])
+                                            h = np.abs(b[1][1] - b[0][1])
+                                            bb_out.append([cx, cy, w, h])
+
+                                    det_out_file.append(str(json.dumps({"image": data.tolist(), "bbox": bb_out, "category_id": p, "timestamp": t, "mac_address": sensor_mac, "normalized": norm})))
                                 with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
                             else:
@@ -496,9 +532,31 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     f.writelines(text)
 
                         running = False
+
+                    elif label_condiition and event.ui_element == clear_button:
+                        if detection_path and not unified:
+                            sensor = eval(det_out_file[det_curr])["ID"]
+                            det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                            bb_lbl_dict[timestamp] = []
+
+                        elif not detection_path and not unified:
+                            times[timestamp] = []
+                        else:
+                            assert unified and not detection_path
+                            cleared = eval(text[text_line])
+                            cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
+                            text[text_line] = str(cleared) + "\n"
+
+                        transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
+                        transparent_surface = transparent_surface.convert_alpha()
+                        disp.blit(surf, (box // 20, box // 20))
+                        disp.blit(transparent_surface, (box // 20, box // 20))
+                        pygame.display.update()
+
                     elif not live and event.ui_element == play_button:
                         if not label_condiition:
                             pause = False
+
                     elif not live and event.ui_element == pause_button:
                         pause = True
                     elif not live and event.ui_element == ff:
@@ -523,25 +581,6 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             text_line -= 1
                     elif label_condiition and event.ui_element == prev_button:
                         text_line = max(0, text_line - 1)
-
-                    elif label_condiition and event.ui_element == clear_button:
-                        if detection_path and not unified:
-                            sensor = eval(det_out_file[det_curr])["ID"]
-                            det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
-                        elif not detection_path and not unified:
-                            times[timestamp] = []
-                            bb_dict[timestamp] = []
-                        else:
-                            assert unified and not detection_path
-                            cleared = eval(text[text_line])
-                            cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
-                            text[text_line] = str(cleared) + "\n"
-
-                        transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
-                        transparent_surface = transparent_surface.convert_alpha()
-                        disp.blit(surf, (box // 20, box // 20))
-                        disp.blit(transparent_surface, (box // 20, box // 20))
-                        pygame.display.update()
 
             manager.process_events(event)
         manager.update(0.0001)
@@ -614,19 +653,20 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
                 else:
                     b = [[z*k for k in d] for d in b]
-                    box_height = b[1][0] - b[0][0]
-                    box_width = b[1][1] - b[0][1]
+                    box_height = np.abs(b[1][0] - b[0][0])
+                    box_width = np.abs(b[1][1] - b[0][1])
                     bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
+                    try:
+                        pose = f'{str(cnt)}-{category_options[category_ids.index(bb_lbl_dict[timestamp][cnt])]}'
+                        pose_text = title_font.render(pose, True, black)
+                        text_rect = pose_text.get_rect()
+                        # text_rect.center = (b[0][0] + ((b[1][0]-b[0][0]) // 2) + (aspect_ratio[0] // 20), b[0][1] - 10 + (aspect_ratio[1] // 20))
 
-                    pose = f'{str(cnt)}-{category_options[category_ids.index(bb_dict[timestamp][cnt])]}'
-                    pose_text = title_font.render(pose, True, black)
-                    text_rect = pose_text.get_rect()
-                    # text_rect.center = (b[0][0] + ((b[1][0]-b[0][0]) // 2) + (aspect_ratio[0] // 20), b[0][1] - 10 + (aspect_ratio[1] // 20))
-
-                    texts.append((pose_text, bb))
-                    cnt += 1
+                        texts.append((pose_text, bb))
+                        cnt += 1
+                    except:
+                        pass
                 pygame.draw.rect(transparent_surface, rect_color, bb, 2)
-
 
         disp.blit(transparent_surface, (box // 20, box // 20))
         for t in texts: disp.blit(t[0], t[1])
@@ -739,7 +779,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
                 while time_curr <= timestamp:
                     # print(timestamp, time_curr)
                     if time_curr == timestamp:
-                        print(det_text[det_curr])
+                        # print(det_text[det_curr])
                         detection_queue.append(eval(detections_current[det_index])["bounding box"])
                         det_packet_curr = eval(detections_current[det_index])
                         det_curr = det_index
