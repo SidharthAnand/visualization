@@ -1,4 +1,5 @@
 import re
+import cv2
 import ast
 import sys
 import time
@@ -16,7 +17,8 @@ max_hue = (240 * 0.00277777777777)
 
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
-               data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False):
+               data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False,
+               gtVidPath=None):
     global playback
     global text_line
     global data_queue
@@ -90,10 +92,32 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     data_queue = deque([])
     detection_queue = deque([])
 
-    disp = pygame.display.set_mode((aspect[0], int(1.1 * aspect[1])))
-    manager = pygame_gui.UIManager((aspect[0], int(1.1 * aspect[1])))
+    multiplier = 1
+    dispX = aspect[0]
+    if gtVidPath:
+        c = cv2.VideoCapture(gtVidPath)
+        total_frames = c.get(7)
+        success, img = c.read()
+        shape = img.shape[1::-1]
+        # print(img.shape)
+        assert box < shape[0] and box < shape[1]
+        cx = 120
+        cy = 400
+        # print(cx, cy)
+        shape = (int(0.8 * box), int(0.8 * box))
+        img = img[cx:img.shape[0] - cx, cy:img.shape[1] - cy, :]
+        # print(img.shape)
+        img = cv2.flip(img, 0)
+        img = img.tobytes()
+        imgSurf = pygame.image.frombuffer(img, shape, "RGB")
+        imgSurf = pygame.transform.rotate(imgSurf, 180)
+        dispX = int(2.25*box)
+        multiplier = 1.55
+
+    disp = pygame.display.set_mode((dispX, int(1.1 * aspect[1])))
+    manager = pygame_gui.UIManager((dispX, int(1.1 * aspect[1])))
     contrast_high = pygame_gui.elements.UIHorizontalSlider(
-        relative_rect=pygame.Rect((br * width,
+        relative_rect=pygame.Rect((br * width * multiplier,
                                    int(aspect[1] // 10),
                                    int(aspect[1] * 0.25),
                                    int(aspect[1] * 1.1 // 20)
@@ -104,7 +128,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         value_range=(100., 130.),
     )
     contrast_low = pygame_gui.elements.UIHorizontalSlider(
-        relative_rect=pygame.Rect((br * width,
+        relative_rect=pygame.Rect((br * width * multiplier,
                                    int(aspect[1] // 6),
                                    int(aspect[1] * 0.25),
                                    int(aspect[1] * 1.1 // 20)
@@ -115,12 +139,18 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         value_range=(50., 80.),
     )
     color_toggle = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((br * width, aspect[1] // 3, aspect[1] // 4, aspect[1] // 20)),
+        relative_rect=pygame.Rect((br * width * multiplier,
+                                   aspect[1] // 3,
+                                   aspect[1] // 4,
+                                   aspect[1] // 20)),
         text="Toggle Color",
         manager=manager
     )
     quit_button = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((br * width, aspect[1] // 1.2, aspect[1] // 4, aspect[1] // 20)),
+        relative_rect=pygame.Rect((br * width * multiplier,
+                                   aspect[1] // 1.2,
+                                   aspect[1] // 4,
+                                   aspect[1] // 20)),
         text="Exit",
         manager=manager
     )
@@ -155,12 +185,18 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         else:
             _thread.start_new_thread(stream_unified_text, (text, fps))
         play_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((plb * width * 0.8, aspect[1] * 0.99, aspect[1] // 6, aspect[1] // 20)),
+            relative_rect=pygame.Rect((plb * width * 0.8,
+                                       aspect[1] * 0.99,
+                                       aspect[1] // 6,
+                                       aspect[1] // 20)),
             text="Play",
             manager=manager
         )
         pause_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((plb * width * 0.8, aspect[1] * 1.0425 * 0.99, aspect[1] // 6, aspect[1] // 20)),
+            relative_rect=pygame.Rect((plb * width * 0.8,
+                                       aspect[1] * 1.0425 * 0.99,
+                                       aspect[1] // 6,
+                                       aspect[1] // 20)),
             text="Pause",
             manager=manager
         )
@@ -182,22 +218,22 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             if detection_path: edited_detection_path = detection_path[:-4] + "_EDITED.txt"
             else: edited_detection_path = data_path[:-4] + "_boundingbox_EDITED.txt"
             edit_button = pygame_gui.elements.UIButton(
-                relative_rect=pygame.Rect((br * width, aspect[1] // 2, aspect[1] // 4, aspect[1] // 20)),
+                relative_rect=pygame.Rect((br * width * multiplier, aspect[1] // 2, aspect[1] // 4, aspect[1] // 20)),
                 text="Edit Bounding Box",
                 manager=manager
             )
             prev_button = pygame_gui.elements.UIButton(
-                relative_rect=pygame.Rect((br * width * 0.925, aspect[1] // 1.8, aspect[1] // 5, aspect[1] // 20)),
+                relative_rect=pygame.Rect((br * width * 0.925 * multiplier, aspect[1] // 1.8, aspect[1] // 5, aspect[1] // 20)),
                 text="Previous Frame",
                 manager=manager
             )
             next_button = pygame_gui.elements.UIButton(
-                relative_rect=pygame.Rect((br * width * 1.125, aspect[1] // 1.8, aspect[1] // 5, aspect[1] // 20)),
+                relative_rect=pygame.Rect((br * width * 1.125 * multiplier, aspect[1] // 1.8, aspect[1] // 5, aspect[1] // 20)),
                 text="Next Frame",
                 manager=manager
             )
             clear_button = pygame_gui.elements.UIButton(
-                relative_rect=pygame.Rect((br * width, aspect[1] // 1.635, aspect[1] // 4, aspect[1] // 20)),
+                relative_rect=pygame.Rect((br * width * multiplier, aspect[1] // 1.635, aspect[1] // 4, aspect[1] // 20)),
                 text="Clear",
                 manager=manager
             )
@@ -210,25 +246,25 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         logo = pygame.image.load("../logo/butlr.logo.png")
     except (FileNotFoundError, pygame.error):
         logo = pygame.image.load("logo/butlr.logo.png")
-    disp.blit(logo, (width - (box // 10), (1.1 * height) - (box // 10)))
+    disp.blit(logo, ((multiplier * width) - (box // 10), (1.1 * height) - (box // 10)))
     surf = pygame.surfarray.make_surface(color(np.full((8, 8), low_bound), low_bound, high_bound))
     surf = pygame.transform.scale(surf, (box, box))
 
     contrast_text = title_font.render("Adjust Contrast", True, white)
     contrast_rect = contrast_text.get_rect()
-    contrast_rect.topleft = (int(width * br), int(height // 20))
+    contrast_rect.topleft = (int(width * br) * multiplier, int(height // 20))
     try:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
     except ValueError:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp / 1000)}", True, white)
     time_rect = time_text.get_rect()
-    time_rect.topleft = ((aspect_ratio[0] // 50), (aspect_ratio[1] // 50))
+    time_rect.topleft = ((aspect_ratio[0] // 50) * multiplier, (aspect_ratio[1] // 50))
     low_bound_text = font.render("Low", True, white)
     low_bound_rect = low_bound_text.get_rect()
-    low_bound_rect.topleft = (int(width * lb), int(height // 4.9))
+    low_bound_rect.topleft = (int(width * lb) * multiplier, int(height // 4.9))
     high_bound_text = font.render("High", True, white)
     high_bound_rect = high_bound_text.get_rect()
-    high_bound_rect.topleft = (int(width * hb), int(height // 7.9))
+    high_bound_rect.topleft = (int(width * hb) * multiplier, int(height // 7.9))
 
     transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
     transparent_surface = transparent_surface.convert_alpha()
@@ -237,6 +273,15 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     points = []
     new_boxes = []
     sensor_mac = ""
+
+    if gtVidPath:
+        frac = 0.8
+        bsx = 20
+        bsy = 2.5
+    else:
+        frac = 1
+        bsx = 1
+        bsy = 1
 
     while running:
         disp.fill(black)
@@ -249,13 +294,16 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
-
+        if gtVidPath: disp.blit(imgSurf, (box // 20, box // 8))
         label_condiition = label and labeling_active and (not live)
 
         disp.blit(contrast_text, contrast_rect)
         disp.blit(low_bound_text, low_bound_rect)
         disp.blit(high_bound_text, high_bound_rect)
-        disp.blit(logo, (width - (box // 10), (1.1 * height) - (box // 10)))
+        offset = 1
+        if multiplier == 1.55:
+            offset = 3.025
+        disp.blit(logo, ((multiplier * width) - ((offset*box) // (10)), (1.1 * height) - (box // 10)))
 
         for event in pygame.event.get():
             # QUIT
@@ -285,10 +333,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 if label_condiition:
                     x = pos[0]
                     y = pos[1]
-                    if 0 <= x - (box // 20) <= box and 0 <= y - (box // 20) <= box:
+                    if multiplier > 1: start = box - (box//20)
+                    else: start = 0
+                    if 0 <= (x - (bsx * box // 20)) <= box / (frac*multiplier) and \
+                            0 <= y - (bsy * box // 20) <= box:
 
-                        points.append([np.around((x - box//20) / box, 4),
-                                       np.around((y - box//20) / box, 4)])
+                        points.append([np.around((x - box//20 - start) / (frac*box), 4),
+                                       np.around((y - bsy*box//20) / (frac*box), 4)])
                         if len(points) == 2:
                             # print(det_out_file)
                             new_boxes.append([p[::-1] for p in points])
@@ -338,6 +389,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 if event.user_type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
                     if not live and event.ui_element == playback:
                         text_line = int(text_length * playback.get_current_value())
+                        if gtVidPath:
+                            c.set(1, int(total_frames * playback.get_current_value()))
                         playback.update(0.0001)
                         # print(playback.get_current_value())
                     elif event.ui_element == contrast_low:
@@ -415,8 +468,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             text[text_line] = str(cleared) + "\n"
                         transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
                         transparent_surface = transparent_surface.convert_alpha()
-                        disp.blit(surf, (box // 20, box // 20))
-                        disp.blit(transparent_surface, (box // 20, box // 20))
+                        disp.blit(surf, (bsx*box // 20, bsy*box // 20))
+                        disp.blit(transparent_surface, (bsx*box // 20, bsy*box // 20))
                         pygame.display.update()
 
             manager.process_events(event)
@@ -453,15 +506,37 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             if mac == "00-17-0d-00-00-70-b9-e3":
                 data = data.T
             #     data = np.asarray([r[::-1] for r in data])
-            surf = pygame.surfarray.make_surface(color(data, low_bound, high_bound))
-            surf = pygame.transform.scale(surf, (box, box))
-            transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
-            transparent_surface = transparent_surface.convert_alpha()
-        disp.blit(surf, (box // 20, box // 20))
 
+            surf = pygame.surfarray.make_surface(color(data, low_bound, high_bound))
+            surf = pygame.transform.scale(surf, (int(frac*box), int(frac*box)))
+            transparent_surface = pygame.Surface((frac*box, frac*box), pygame.SRCALPHA, 32)
+            transparent_surface = transparent_surface.convert_alpha()
+
+            if gtVidPath:
+                c.get(0)
+                c.set(1, int(total_frames * playback.get_current_value()))
+                success, img = c.read()
+                shape = img.shape[1::-1]
+                # print(img.shape)
+                assert box < shape[0] and box < shape[1]
+                cx = 120
+                cy = 400
+                # print(cx, cy)
+                shape = (int(frac*box), int(frac*box))
+                img = img[cx:img.shape[0]-cx, cy:img.shape[1]-cy, :]
+                # print(img.shape)
+                img = cv2.flip(img, 0)
+                img = img.tobytes()
+                # print(type(img))
+                imgSurf = pygame.image.frombuffer(img, shape, "RGB")
+                imgSurf = pygame.transform.rotate(imgSurf, 180)
+                disp.blit(imgSurf, (box // 20, box // 8))
+
+        disp.blit(surf, (bsx * box // 20, bsy * box // 20))
         while len(detection_queue) >= 1:
+            # print(detection_queue)
             texts = []
-            transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
+            transparent_surface = pygame.Surface((int(frac*box), int(frac*box)), pygame.SRCALPHA, 32)
             transparent_surface = transparent_surface.convert_alpha()
             boxes = detection_queue.popleft()
             if color_on:
@@ -470,7 +545,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 rect_color = red
 
             for b in boxes:
-                z = aspect_ratio[0]
+                z = aspect_ratio[0] * frac
                 if not label:
                     try:
                         b = [z*k for k in b]
@@ -493,7 +568,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
                 pygame.draw.rect(transparent_surface, rect_color, bb, 2)
 
-        disp.blit(transparent_surface, (box // 20, box // 20))
+        disp.blit(transparent_surface, (bsx*box // 20, bsy*box // 20))
         for t in texts: disp.blit(t[0], t[1])
 
         manager.draw_ui(disp)
@@ -763,6 +838,7 @@ def main():
     parser.add_argument("-lbl", default="f")
     parser.add_argument("-mac", default="xxx")
     parser.add_argument("-uni", default="f")
+    parser.add_argument("-gtv", default="")
 
     args = parser.parse_args()
 
@@ -776,8 +852,9 @@ def main():
     aspect_ratio = (eval(args.sz), eval(args.sz))
     live = (not path) and (len(topic) > 0)
     label = (args.lbl == "t")
+    gtv = args.gtv
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
-               label=label, detection_path=det_path, mac=mac, unified=unified)
+               label=label, detection_path=det_path, mac=mac, unified=unified, gtVidPath=gtv)
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",
