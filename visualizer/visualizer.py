@@ -17,11 +17,17 @@ import paho.mqtt.client as paho
 
 max_hue = (240 * 0.00277777777777)
 
+def closest(list, Number):
+    aux = []
+    for valor in list:
+        aux.append(abs(Number-valor))
+
+    return aux.index(min(aux))
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
                data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False,
                restream=None, time_start=None, time_end=None, time_offset=None, db=None, hid=None, sensor=None,
-               normalized=None):
+               normalized=None, snap=None):
     global playback
     global text_line
     global data_queue
@@ -354,10 +360,45 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 if label_condiition:
                     x = pos[0]
                     y = pos[1]
+                    # print(x)
                     if 0 <= x - (box // 20) <= box and 0 <= y - (box // 20) <= box:
-
-                        points.append([np.around((x - box//20) / box, 4),
-                                       np.around((y - box//20) / box, 4)])
+                        if not snap:
+                            points.append([np.around((x - box//20) / box, 4),
+                                           np.around((y - box//20) / box, 4)])
+                        else:
+                            if h == 8:
+                                possible_coord = []
+                                pos_co = 0
+                                xx = x
+                                for x in range(int(h)+1):
+                                    possible_coord.append(pos_co)
+                                    pos_co += (box/h)
+                                print(possible_coord)
+                                print(len(possible_coord))
+                                pt_x = (xx - (box//20))
+                                pt_y = (y - box//20)
+                                pt_x = possible_coord[closest(possible_coord, pt_x)]
+                                pt_y = possible_coord[closest(possible_coord, pt_y)]
+                                pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
+                                print(f'x {x} y {y} box {box} pt_x {pt_x} pt_y {pt_y}')
+                                points.append(pt)
+                            elif h == 32:
+                                possible_coord = []
+                                pos_co = 0
+                                xx = x
+                                for x in range(int(h)+1):
+                                    possible_coord.append(pos_co)
+                                    pos_co += (box/h)
+                                print(possible_coord)
+                                print(len(possible_coord))
+                                pt_x = (xx - (box//20))
+                                pt_y = (y - box//20)
+                                pt_x = possible_coord[closest(possible_coord, pt_x)]
+                                pt_y = possible_coord[closest(possible_coord, pt_y)]
+                                pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
+                                print(f'x {x} y {y} box {box} pt_x {pt_x} pt_y {pt_y}')
+                                points.append(pt)
+                            pass
                         if len(points) == 2:
                             # print(det_out_file)
                             bb_lbl.append(selected_pos)
@@ -607,6 +648,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 except:
                     data = np.asarray(data)
                     h = int(np.sqrt(data.size))
+
+                # print(h)
+
             else:
                 data = packet
                 data = np.asarray(data)
@@ -990,6 +1034,8 @@ def main():
     parser.add_argument("-db", default="", help="Database for for restream")
 
     parser.add_argument("-normalized", default="f", help="If the data is normalized or not")
+    parser.add_argument("-snap", default="f", help="Snap to nearest pixel")
+
 
     args = parser.parse_args()
 
@@ -1019,10 +1065,11 @@ def main():
     restream = (args.restream == 't')
 
     normal = (args.normalized == 't')
+    snap = (args.snap == 't')
 
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
                label=label, detection_path=det_path, mac=mac, unified=unified, restream=restream, time_start=ts, time_offset=to, time_end=te,
-               hid=hid, sensor=sensor, db=db, normalized=normal)
+               hid=hid, sensor=sensor, db=db, normalized=normal, snap=snap)
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",
