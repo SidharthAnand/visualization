@@ -340,19 +340,57 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 elif event.key == pygame.K_SPACE:
                     if not label_condiition:
                         pause = not pause
+                elif event.key == pygame.K_e:
+                    if not labeling_active:
+                        pause = True
+                        labeling_active = True
+                        edit_button.set_text("Done Editing")
+                    else:
+                        labeling_active = False
+                        edit_button.set_text("Edit Bounding Box")
+                elif label_condiition and pygame.K_c:
+                    if detection_path and not unified:
+                        sensor = eval(det_out_file[det_curr])["ID"]
+                        det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                        bb_lbl_dict[timestamp] = []
 
-                elif event.key == pygame.K_LEFT: text_line = max(text_line - 100, 0)
+                    elif not detection_path and not unified:
+                        times[timestamp] = []
+                    else:
+                        assert unified and not detection_path
+                        cleared = eval(text[text_line])
+                        cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
+                        text[text_line] = str(cleared) + "\n"
+
+                    transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
+                    transparent_surface = transparent_surface.convert_alpha()
+                    disp.blit(surf, (box // 20, box // 20))
+                    disp.blit(transparent_surface, (box // 20, box // 20))
+                    pygame.display.update()
+
+                elif event.key == pygame.K_LEFT:
+                    text_line = max(text_line - 100, 0)
+                elif event.key == pygame.K_n:
+                    text_line = max(0, text_line - 1)
+                elif event.key == pygame.K_m:
+                    text_line += 1
+                    if text_line == text_length:
+                        text_line -= 1
 
                 elif event.key == pygame.K_RIGHT:
                     try: text_line = min(len(data_text) - 1, text_line + 100)
                     except IndexError: text_line = -1
-                elif event.key == pygame.K_c:
+                elif event.key == pygame.K_t:
                     if color_on:
                         color = lambda x, y, z: grayscale(x, y, z)
                         color_on = False
                     else:
                         color = lambda x, y, z: thermal(x, y, z)
                         color_on = True
+                elif event.key == pygame.K_1:
+                    print(pos_drop.selected_option)
+                    pos_drop.selected_option = "Sitting"
+                    print(pos_drop.selected_option)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
@@ -469,8 +507,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         high_rect = contrast_high_text.get_rect()
                         high_rect.topleft = ((aspect[0] - (box // 16)), int(aspect[1] // 8.75))  # 8.75
                         disp.blit(contrast_high_text, high_rect)
+
                 elif event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED and label_condiition:
                     selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+
                 elif event.user_type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == color_toggle:
                         if color_on:
