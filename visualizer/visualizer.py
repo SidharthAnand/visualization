@@ -17,12 +17,14 @@ import paho.mqtt.client as paho
 
 max_hue = (240 * 0.00277777777777)
 
+
 def closest(list, Number):
     aux = []
     for valor in list:
         aux.append(abs(Number-valor))
 
     return aux.index(min(aux))
+
 
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
                data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False,
@@ -38,8 +40,12 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     global client
     global pause
     global timestamp
+    global selected_pos
     global det_out_file
     global times
+    global pos_drop
+    global category_ids
+    global category_options
     global vizMac
 
     timestamp = time.time()
@@ -317,11 +323,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             next_button.visible = True
             pos_drop.visible = True
             prev_button.visible = True
+            pos_drop.show()
         elif label and not labeling_active:
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
             pos_drop.visible = False
+            pos_drop.hide()
 
         label_condiition = label and labeling_active and (not live)
 
@@ -337,10 +345,48 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             # ESC: quit this scene
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: running = False
+                elif event.key == pygame.K_q and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Sitting',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_w and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Standing',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_e and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Lying Down',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_a and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Uncertain',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_f and label_condiition:
+                    text_line = max(0, text_line-1)
+                elif event.key == pygame.K_g and label_condiition:
+                    text_line += 1
+                    if text_line == text_length:
+                        text_line -= 1
                 elif event.key == pygame.K_SPACE:
                     if not label_condiition:
                         pause = not pause
-                elif event.key == pygame.K_e:
+                elif event.key == pygame.K_r:
                     if not labeling_active:
                         pause = True
                         labeling_active = True
@@ -348,6 +394,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     else:
                         labeling_active = False
                         edit_button.set_text("Edit Bounding Box")
+                elif event.key == pygame.K_t:
+                    if color_on:
+                        color = lambda x, y, z: grayscale(x, y, z)
+                        color_on = False
+                    else:
+                        color = lambda x, y, z: thermal(x, y, z)
+                        color_on = True
                 elif label_condiition and pygame.K_c:
                     if detection_path and not unified:
                         sensor = eval(det_out_file[det_curr])["ID"]
@@ -370,27 +423,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
                 elif event.key == pygame.K_LEFT:
                     text_line = max(text_line - 100, 0)
-                elif event.key == pygame.K_n:
-                    text_line = max(0, text_line - 1)
-                elif event.key == pygame.K_m:
-                    text_line += 1
-                    if text_line == text_length:
-                        text_line -= 1
 
                 elif event.key == pygame.K_RIGHT:
-                    try: text_line = min(len(data_text) - 1, text_line + 100)
+                    try: text_line = min(text_length-1, text_line + 100)
                     except IndexError: text_line = -1
-                elif event.key == pygame.K_t:
-                    if color_on:
-                        color = lambda x, y, z: grayscale(x, y, z)
-                        color_on = False
-                    else:
-                        color = lambda x, y, z: thermal(x, y, z)
-                        color_on = True
-                elif event.key == pygame.K_1:
-                    print(pos_drop.selected_option)
-                    pos_drop.selected_option = "Sitting"
-                    print(pos_drop.selected_option)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
@@ -417,10 +453,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 pt_y = possible_coord[closest(possible_coord, pt_y)]
                                 pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
                                 points.append(pt)
+
                         if len(points) == 2:
                             # print(det_out_file)
-                            bb_lbl.append(selected_pos)
                             new_boxes.append([p[::-1] for p in points])
+
+                            for x in new_boxes:
+                                bb_lbl.append(selected_pos)
 
                             if detection_path and not unified:
                                 try:
@@ -456,12 +495,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 if len(bb_lbl_dict[timestamp]) >= 0:
                                     bb_lbl_dict[timestamp].extend(bb_lbl)
                                     # print(bb_lbl_dict[timestamp])
+                                else:
+                                    bb_lbl_dict[timestamp] = bb_lbl
                             except:
                                 bb_lbl_dict[timestamp] = bb_lbl
 
                             bbs.extend(new_boxes)
                             bbs, bb_lbl_dict[timestamp] = (list(t) for t in zip(*sorted(zip(bbs, bb_lbl_dict[timestamp]))))
-
                             # bbs.sort3(key=lambda p: p[0]) # sort based on x coordinate of first element
                             # print(bbs, bb_lbl)
                             # print([x for _, x in sorted(zip(bb_lbl, bbs), key=lambda pair: pair[0])])
@@ -482,6 +522,9 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 new_line = eval(text[text_line])
                                 new_line["bbox"] = bbs
                                 text[text_line] = str(new_line) + "\n"
+
+                            # print(times)
+                            # print(bb_lbl_dict)
 
                             points = []
                             bb_lbl = []
@@ -570,10 +613,17 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
                                 det_out_file = []
 
+
                                 for ind in range(len(times.keys())):
+                                    bb_out = []
+
                                     b = list(times.values())[ind]
                                     t = list(times.keys())[ind]
-                                    p = list(bb_lbl_dict.values())[ind]
+                                    try:
+                                        p = list(bb_lbl_dict[t])
+                                    except:
+                                        p = []
+
                                     if b:
                                         bb_out = []
                                         b = list(b)
@@ -602,6 +652,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
 
                         elif not detection_path and not unified:
                             times[timestamp] = []
+                            bb_lbl_dict[timestamp] = []
+
                         else:
                             assert unified and not detection_path
                             cleared = eval(text[text_line])
@@ -793,13 +845,22 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global det_curr
     global text_length
     global pause
+    global category_ids
+    global category_options
+    global pos_drop
     global timestamp
+    global selected_pos
     global times
     last_time = time.time()
     new_file = not det_text
     last_detection_line = 0
     parse_array = False
+
     while True:
+        try:
+            selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+        except:
+            selected_pos = -1
         time_check = time.time()
         t1 = time.time()
         try:
