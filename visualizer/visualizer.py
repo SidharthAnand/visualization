@@ -2,7 +2,7 @@ import json
 import re
 import os
 from datetime import timedelta
-import cv2
+# import cv2
 import ast
 import sys
 import time
@@ -13,6 +13,7 @@ import colorsys
 import pygame_gui
 import numpy as np
 from collections import deque
+from pygame import mixer
 from datetime import datetime
 import paho.mqtt.client as paho
 
@@ -393,6 +394,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             # ESC: quit this scene
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: running = False
+                elif event.key == pygame.K_SLASH:
+                    ohno()
                 elif event.key == pygame.K_q and label_condiition:
                     pos_drop.kill()
                     pos_drop = pygame_gui.elements.UIDropDownMenu(
@@ -1170,6 +1173,13 @@ def date_format(date, format='%Y-%m-%d %H:%M:%S'):
         return False
 
 
+
+def ohno():
+    mixer.init()
+    mixer.music.set_volume(0.7)
+    mixer.music.load('ohno.mp3')
+    mixer.music.play()
+
 def restream_format(path):
     with open(path, 'r') as f:
         text = f.readlines()
@@ -1242,6 +1252,7 @@ def main():
 
     normal = (args.normalized == 't')
     snap = (args.snap == 't')
+    gtv = args.gtv
 
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
                label=label, detection_path=det_path, mac=mac, unified=unified, restream=restream, time_start=ts, time_offset=to, time_end=te,
