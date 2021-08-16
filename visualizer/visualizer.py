@@ -376,7 +376,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             pos_drop.visible = False
             pos_drop.hide()
 
-        if gtVidPath: disp.blit(imgSurf, (box // 20, box // 8))
+        if gtVidPath:
+            disp.blit(imgSurf, (box // 20, box // 8))
         label_condiition = label and labeling_active and (not live)
 
         disp.blit(contrast_text, contrast_rect)
@@ -396,6 +397,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 if event.key == pygame.K_ESCAPE: running = False
                 elif event.key == pygame.K_SLASH:
                     ohno()
+                    # mixer.quit()
+
                 elif event.key == pygame.K_q and label_condiition:
                     pos_drop.kill()
                     pos_drop = pygame_gui.elements.UIDropDownMenu(
@@ -486,32 +489,30 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     x = pos[0]
                     y = pos[1]
                     # print(x)
-                    if 0 <= x - (box // 20) <= box and 0 <= y - (box // 20) <= box:
+                    if multiplier > 1:
+                        start = box - (box//20)
+                    else:
+                        start = 0
+                    if 0 <= (x - (bsx * box // 20)) <= box / (frac*multiplier) and \
+                            0 <= y - (bsy * box // 20) <= box:
                         if not snap:
-                            points.append([np.around((x - box//20) / box, 4),
-                                           np.around((y - box//20) / box, 4)])
+                            points.append([np.around((x - box // 20 - start) / (frac * box), 4),
+                                           np.around((y - bsy * box // 20) / (frac * box), 4)])
                         else:
                             if h == 8 or h == 32:
                                 possible_coord = []
                                 pos_co = 0
                                 xx = x
-                                for x in range(int(h)+1):
+                                for x in range(int(h) + 1):
                                     possible_coord.append(pos_co)
-                                    pos_co += (box/h)
-                                pt_x = (xx - (box//20))
-                                pt_y = (y - box//20)
+                                    pos_co += (box / h)
+                                pt_x = (xx - (box // 20) - start)
+                                pt_y = (y - box // 20)
                                 pt_x = possible_coord[closest(possible_coord, pt_x)]
                                 pt_y = possible_coord[closest(possible_coord, pt_y)]
-                                pt = [np.around(pt_x/ box, 4), np.around(pt_y/ box, 4)]
+                                pt = [np.around(pt_x / (frac * box), 4), np.around(pt_y / (frac * box), 4)]
                                 points.append(pt)
 
-                    if multiplier > 1: start = box - (box//20)
-                    else: start = 0
-                    if 0 <= (x - (bsx * box // 20)) <= box / (frac*multiplier) and \
-                            0 <= y - (bsy * box // 20) <= box:
-
-                        points.append([np.around((x - box//20 - start) / (frac*box), 4),
-                                       np.around((y - bsy*box//20) / (frac*box), 4)])
                         if len(points) == 2:
                             # print(det_out_file)
                             new_boxes.append([p[::-1] for p in points])
