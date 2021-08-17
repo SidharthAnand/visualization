@@ -1,5 +1,8 @@
+import json
 import re
-import cv2
+import os
+from datetime import timedelta
+# import cv2
 import ast
 import sys
 import time
@@ -10,15 +13,25 @@ import colorsys
 import pygame_gui
 import numpy as np
 from collections import deque
+from pygame import mixer
 from datetime import datetime
 import paho.mqtt.client as paho
 
 max_hue = (240 * 0.00277777777777)
 
 
+def closest(list, Number):
+    aux = []
+    for valor in list:
+        aux.append(abs(Number-valor))
+
+    return aux.index(min(aux))
+
+
 def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(600, 600), fps=8,
                data_topic=None, mqtt_address=None, label=False, mac="xxx", unified=False,
-               gtVidPath=None):
+               restream=None, time_start=None, time_end=None, time_offset=None, db=None, hid=None, sensor=None,
+               normalized=None, snap=None, gtVidPath=None):
     global playback
     global text_line
     global data_queue
@@ -29,13 +42,19 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     global client
     global pause
     global timestamp
+    global selected_pos
     global det_out_file
     global times
+    global pos_drop
+    global category_ids
+    global category_options
     global vizMac
+
     timestamp = time.time()
     vizMac = mac
     client = paho.Client()
     pause = label
+    norm = normalized
 
     pygame.init()
 
@@ -57,6 +76,30 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     font_size_large = int(grid[2] // 30)
     det_index = 0
     det_curr = 0
+
+    # error checking for time restream
+    try:
+        if restream:
+            time_offset = float(time_offset)
+    except:
+        print('ERROR: Time offset not valid')
+        quit()
+    if not date_format(time_start) and restream:
+        print("ERROR: Start time in wrong format")
+        quit()
+    elif not date_format(time_end) and time_end is not None and restream:
+        print('ERROR: End time in wrong format')
+        quit()
+
+    is_restream = (restream and (isinstance(time_offset, float)))
+
+    category_options = ['Uncertain', 'Sitting', 'Standing',
+                        'Lying Down']  # change the title for whether the person is unsure
+    category_ids = [-1, 0, 1, 2]
+    selected_pos = -1
+    category_options = ['Uncertain', 'Sitting', 'Standing',
+                        'Lying Down']  # change the title for whether the person is unsure
+    category_ids = [-1, 0, 1, 2]
 
     if not smaller_size:
         br = 0.88
@@ -155,7 +198,29 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         manager=manager
     )
     if not live:
+
+        if is_restream:
+            time_end = str(time_change(time_start, minutes=time_offset) if time_end is None else time_end)
+
+            output = os.popen(f"restream.py -db {db} -dt sensor_raw -did {sensor} -ts \"{time_start}\" -te \"{time_end}\" -hid {hid} -stt True").readlines()
+
+            stri = ''
+            for x in output:
+                stri += x
+            print(stri)
+
+            try:
+                data_path = output[-2].replace('\n', '')
+                open(data_path)
+            except Exception as e:
+                print('ERROR: Could not make API request. Sensor ID(sensor), Hive ID(hid), or Database(db) might need '
+                      'to be changed')
+                quit()
+
+            # restream_format(data_path)
+
         assert data_path is not None
+
         with open(data_path, "r") as f:
             text = f.readlines()
             if type(eval(text[0])) is tuple:
@@ -170,6 +235,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             detection_text = None
             det_out_file = []
             times = {}
+
         playback = pygame_gui.elements.UIHorizontalSlider(
             relative_rect=pygame.Rect((box // 20,
                                        int(aspect[1] * 1.02),
@@ -237,6 +303,15 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 text="Clear",
                 manager=manager
             )
+
+            pos_drop = pygame_gui.elements.UIDropDownMenu(
+                relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                options_list=category_options,
+                starting_option='Position',
+                manager=manager
+            )
+
+            pos_drop.visible = False
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
@@ -255,7 +330,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     contrast_rect.topleft = (int(width * br) * multiplier, int(height // 20))
     try:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp)}", True, white)
-    except ValueError:
+    except:
         time_text = font.render(f"Time: {datetime.fromtimestamp(timestamp / 1000)}", True, white)
     time_rect = time_text.get_rect()
     time_rect.topleft = ((aspect_ratio[0] // 50) * multiplier, (aspect_ratio[1] // 50))
@@ -270,6 +345,8 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
     transparent_surface = transparent_surface.convert_alpha()
     labeling_active = False
     texts = []
+    bb_lbl = []
+    bb_lbl_dict = {}
     points = []
     new_boxes = []
     sensor_mac = ""
@@ -289,12 +366,18 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
         if label and labeling_active:
             clear_button.visible = True
             next_button.visible = True
+            pos_drop.visible = True
             prev_button.visible = True
+            pos_drop.show()
         elif label and not labeling_active:
             clear_button.visible = False
             next_button.visible = False
             prev_button.visible = False
-        if gtVidPath: disp.blit(imgSurf, (box // 20, box // 8))
+            pos_drop.visible = False
+            pos_drop.hide()
+
+        if gtVidPath:
+            disp.blit(imgSurf, (box // 20, box // 8))
         label_condiition = label and labeling_active and (not live)
 
         disp.blit(contrast_text, contrast_rect)
@@ -312,20 +395,92 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             # ESC: quit this scene
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: running = False
+                elif event.key == pygame.K_SLASH:
+                    ohno()
+                    # mixer.quit()
+
+                elif event.key == pygame.K_q and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Sitting',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_w and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Standing',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_e and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Lying Down',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_a and label_condiition:
+                    pos_drop.kill()
+                    pos_drop = pygame_gui.elements.UIDropDownMenu(
+                        relative_rect=pygame.Rect((br * width, aspect[1] // 1.5, aspect[1] // 4, aspect[1] // 20)),
+                        options_list=category_options,
+                        starting_option='Uncertain',
+                        manager=manager
+                    )
+                elif event.key == pygame.K_f and label_condiition:
+                    text_line = max(0, text_line-1)
+                elif event.key == pygame.K_g and label_condiition:
+                    text_line += 1
+                    if text_line == text_length:
+                        text_line -= 1
                 elif event.key == pygame.K_SPACE:
                     if not label_condiition:
                         pause = not pause
-                elif event.key == pygame.K_LEFT: text_line = max(text_line - 100, 0)
-                elif event.key == pygame.K_RIGHT:
-                    try: text_line += 100
-                    except IndexError: text_line = -1
-                elif event.key == pygame.K_c:
+                elif event.key == pygame.K_r:
+                    if not labeling_active:
+                        pause = True
+                        labeling_active = True
+                        edit_button.set_text("Done Editing")
+                    else:
+                        labeling_active = False
+                        edit_button.set_text("Edit Bounding Box")
+                elif event.key == pygame.K_t:
                     if color_on:
                         color = lambda x, y, z: grayscale(x, y, z)
                         color_on = False
                     else:
                         color = lambda x, y, z: thermal(x, y, z)
                         color_on = True
+                elif label_condiition and pygame.K_c:
+                    if detection_path and not unified:
+                        sensor = eval(det_out_file[det_curr])["ID"]
+                        det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                        bb_lbl_dict[timestamp] = []
+
+                    elif not detection_path and not unified:
+                        times[timestamp] = []
+                    else:
+                        assert unified and not detection_path
+                        cleared = eval(text[text_line])
+                        cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
+                        text[text_line] = str(cleared) + "\n"
+
+                    transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
+                    transparent_surface = transparent_surface.convert_alpha()
+                    disp.blit(surf, (box // 20, box // 20))
+                    disp.blit(transparent_surface, (box // 20, box // 20))
+                    pygame.display.update()
+
+                elif event.key == pygame.K_LEFT:
+                    text_line = max(text_line - 100, 0)
+
+                elif event.key == pygame.K_RIGHT:
+                    try: text_line = min(text_length-1, text_line + 100)
+                    except IndexError: text_line = -1
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
@@ -333,16 +488,38 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 if label_condiition:
                     x = pos[0]
                     y = pos[1]
-                    if multiplier > 1: start = box - (box//20)
-                    else: start = 0
+                    # print(x)
+                    if multiplier > 1:
+                        start = box - (box//20)
+                    else:
+                        start = 0
                     if 0 <= (x - (bsx * box // 20)) <= box / (frac*multiplier) and \
                             0 <= y - (bsy * box // 20) <= box:
+                        if not snap:
+                            points.append([np.around((x - box // 20 - start) / (frac * box), 4),
+                                           np.around((y - bsy * box // 20) / (frac * box), 4)])
+                        else:
+                            if h == 8 or h == 32:
+                                possible_coord = []
+                                pos_co = 0
+                                xx = x
+                                for x in range(int(h) + 1):
+                                    possible_coord.append(pos_co)
+                                    pos_co += (box / h)
+                                pt_x = (xx - (box // 20) - start)
+                                pt_y = (y - box // 20)
+                                pt_x = possible_coord[closest(possible_coord, pt_x)]
+                                pt_y = possible_coord[closest(possible_coord, pt_y)]
+                                pt = [np.around(pt_x / (frac * box), 4), np.around(pt_y / (frac * box), 4)]
+                                points.append(pt)
 
-                        points.append([np.around((x - box//20 - start) / (frac*box), 4),
-                                       np.around((y - bsy*box//20) / (frac*box), 4)])
                         if len(points) == 2:
                             # print(det_out_file)
                             new_boxes.append([p[::-1] for p in points])
+
+                            for x in new_boxes:
+                                bb_lbl.append(selected_pos)
+
                             if detection_path and not unified:
                                 try:
                                     det_line = eval(det_out_file[det_curr])
@@ -353,10 +530,13 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                 except Exception:
                                     current_packet = {"bounding box": [], "timestamp": timestamp, "ID": sensor_mac}
                                     det_out_file.insert(det_curr, str(current_packet))
+
                                 bbs = current_packet["bounding box"]
                                 # print("yeehaw")
+
                             elif not detection_path and not unified:
                                 bbs = times[timestamp]
+
                             else:
                                 assert not detection_path and unified
                                 full_packet = text[text_line]
@@ -370,19 +550,43 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                                     boxes_out.append([x_center, y_center, b_width, b_height])
                                 new_boxes = boxes_out
 
+                            try:
+                                if len(bb_lbl_dict[timestamp]) >= 0:
+                                    bb_lbl_dict[timestamp].extend(bb_lbl)
+                                    # print(bb_lbl_dict[timestamp])
+                                else:
+                                    bb_lbl_dict[timestamp] = bb_lbl
+                            except:
+                                bb_lbl_dict[timestamp] = bb_lbl
+
                             bbs.extend(new_boxes)
-                            bbs.sort(key=lambda p: p[0])
+                            bbs, bb_lbl_dict[timestamp] = (list(t) for t in zip(*sorted(zip(bbs, bb_lbl_dict[timestamp]))))
+                            # bbs.sort3(key=lambda p: p[0]) # sort based on x coordinate of first element
+                            # print(bbs, bb_lbl)
+                            # print([x for _, x in sorted(zip(bb_lbl, bbs), key=lambda pair: pair[0])])
+
                             if detection_path and not unified:
+                                # temp_lbl = [-1 for x in bbs]
                                 det_out_file[det_curr] = str({"bounding box": bbs,
                                                               "timestamp": timestamp,
                                                               "ID": sensor_mac})
-                            elif not detection_path and not unified: times[timestamp] = bbs
+                                # bb_lbl_dict[timestamp] = str(det_out_file[det_curr]["category_id"])
+                                for det in det_out_file:
+                                    eval(det)
+                            elif not detection_path and not unified:
+                                times[timestamp] = bbs
+                                # bb_lbl_dict[timestamp] = bb_lbl
+
                             elif not detection_path and unified:
                                 new_line = eval(text[text_line])
                                 new_line["bbox"] = bbs
                                 text[text_line] = str(new_line) + "\n"
 
+                            # print(times)
+                            # print(bb_lbl_dict)
+
                             points = []
+                            bb_lbl = []
                             new_boxes = []
 
             if event.type == pygame.USEREVENT:
@@ -407,6 +611,10 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                         high_rect = contrast_high_text.get_rect()
                         high_rect.topleft = ((aspect[0] - (box // 16)), int(aspect[1] // 8.75))  # 8.75
                         disp.blit(contrast_high_text, high_rect)
+
+                elif event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED and label_condiition:
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+
                 elif event.user_type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == color_toggle:
                         if color_on:
@@ -416,27 +624,119 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                             color = lambda x, y, z: thermal(x, y, z)
                             color_on = True
                     elif event.ui_element == quit_button:
+
                         if label:
                             if detection_path and not unified:
+                                print(bb_lbl_dict)
                                 det_out_file = [x for x in det_out_file if eval(x)["bounding box"]]
-                                with open(edited_detection_path, "a+") as f:
-                                   f.writelines(det_out_file)
+                                out = []
+                                for x in det_out_file:
+                                    if eval(x)["bounding box"]:
+                                        # print(eval(x))
+                                        b = list(eval(x)["bounding box"])
+                                        bb_out = []
+                                        for b in b:
+                                            timestamp = str(eval(x)["timestamp"])
+                                            cx = (b[0][0]+b[1][0])/2
+                                            cy = (b[0][1]+b[1][1])/2
+                                            w = np.abs(b[1][0] - b[0][0])
+                                            h = np.abs(b[1][1] - b[0][1])
+                                            bb_out.append([cx, cy, w, h])
+
+                                            try:
+                                                if int(timestamp) in list(bb_lbl_dict.keys()):
+                                                    cat_ids = bb_lbl_dict[int(timestamp)]
+                                                else:
+                                                    cat_ids = []
+                                            except:
+                                                if float(timestamp) in list(bb_lbl_dict.keys()):
+                                                    cat_ids = bb_lbl_dict[float(timestamp)]
+                                                else:
+                                                    cat_ids = []
+                                        out.append(str(json.dumps({"image": data.tolist(),
+                                                                   "bbox": bb_out,
+                                                                   "category_id": cat_ids,
+                                                                   "timestamp": timestamp,
+                                                                   "mac_address": sensor_mac,
+                                                                   "normalized": norm})))
+                                out.pop(-1)
+                                with open(edited_detection_path, "w") as f:
+                                    f.write('\n'.join(out))
+
+                            # Old format
+                            # elif not detection_path and not unified:
+                            #     det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
+                            #     with open(edited_detection_path, "a+") as f:
+                            #         f.writelines([x + "\n" for x in det_out_file])
+
+                            # New format
                             elif not detection_path and not unified:
                                 det_out_file = [str({"bounding box": v, "timestamp": k, "ID": ""}) for k, v in times.items() if v]
+                                det_out_file = []
+
+
+                                for ind in range(len(times.keys())):
+                                    bb_out = []
+
+                                    b = list(times.values())[ind]
+                                    t = list(times.keys())[ind]
+                                    try:
+                                        p = list(bb_lbl_dict[t])
+                                    except:
+                                        p = []
+
+                                    if b:
+                                        bb_out = []
+                                        b = list(b)
+                                        for b in b:
+                                            # b = list(b)[0]
+                                            cx = (b[0][0]+b[1][0])/2
+                                            cy = (b[0][1]+b[1][1])/2
+                                            w = np.abs(b[1][0] - b[0][0])
+                                            h = np.abs(b[1][1] - b[0][1])
+                                            bb_out.append([cx, cy, w, h])
+
+                                    det_out_file.append(str(json.dumps({"image": data.tolist(), "bbox": bb_out, "category_id": p, "timestamp": t, "mac_address": sensor_mac, "normalized": norm})))
                                 with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
                             else:
                                 with open(data_path[:-4]+"_EDITED.txt", "w") as f:
                                     f.writelines(text)
+
                         running = False
+
+                    elif label_condiition and event.ui_element == clear_button:
+                        if detection_path and not unified:
+                            sensor = eval(det_out_file[det_curr])["ID"]
+                            det_out_file[det_curr] = str({"bounding box": [], "timestamp": timestamp, "ID": sensor})
+                            bb_lbl_dict[timestamp] = []
+
+                        elif not detection_path and not unified:
+                            times[timestamp] = []
+                            bb_lbl_dict[timestamp] = []
+
+                        else:
+                            assert unified and not detection_path
+                            cleared = eval(text[text_line])
+                            cleared = {k: v if k != "bbox" else [] for k, v in cleared.items()}
+                            text[text_line] = str(cleared) + "\n"
+
+                        transparent_surface = pygame.Surface((box, box), pygame.SRCALPHA, 32)
+                        transparent_surface = transparent_surface.convert_alpha()
+                        disp.blit(surf, (box // 20, box // 20))
+                        disp.blit(transparent_surface, (box // 20, box // 20))
+                        pygame.display.update()
+
                     elif not live and event.ui_element == play_button:
                         if not label_condiition:
                             pause = False
+
                     elif not live and event.ui_element == pause_button:
                         pause = True
                     elif not live and event.ui_element == ff:
                         try:
-                            text_line += 100
+                            text_line = min(len(data_text) - 1, text_line + 100)
+
                         except IndexError:
                             text_line = -1
                     elif not live and event.ui_element == rw:
@@ -497,11 +797,15 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                 except:
                     data = np.asarray(data)
                     h = int(np.sqrt(data.size))
+
+                # print(h)
+
             else:
                 data = packet
                 data = np.asarray(data)
                 h = int(np.sqrt(data.size))
                 if h == 32: data *= 4
+            img = data
             data = data.reshape((h, h))
             if mac == "00-17-0d-00-00-70-b9-e3":
                 data = data.T
@@ -544,6 +848,7 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
             else:
                 rect_color = red
 
+            cnt = 0
             for b in boxes:
                 z = aspect_ratio[0] * frac
                 if not label:
@@ -566,6 +871,16 @@ def visualizer(data_path=None, detection_path=None, live=False, aspect_ratio=(60
                     box_height = np.abs(b[1][0] - b[0][0])
                     box_width = np.abs(b[1][1] - b[0][1])
                     bb = pygame.Rect((b[0][1], b[0][0], box_width, box_height))
+                    try:
+                        pose = f'{str(cnt)}-{category_options[category_ids.index(bb_lbl_dict[timestamp][cnt])]}'
+                        pose_text = title_font.render(pose, True, black)
+                        text_rect = pose_text.get_rect()
+                        # text_rect.center = (b[0][0] + ((b[1][0]-b[0][0]) // 2) + (aspect_ratio[0] // 20), b[0][1] - 10 + (aspect_ratio[1] // 20))
+
+                        texts.append((pose_text, bb))
+                        cnt += 1
+                    except:
+                        pass
                 pygame.draw.rect(transparent_surface, rect_color, bb, 2)
 
         disp.blit(transparent_surface, (bsx*box // 20, bsy*box // 20))
@@ -621,6 +936,7 @@ def thermal(im, lo=70, hi=110):
 def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global playback
     global text_line
+    global data_text
     global data_queue
     global detection_queue
     global det_packet_curr
@@ -628,13 +944,22 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global det_curr
     global text_length
     global pause
+    global category_ids
+    global category_options
+    global pos_drop
     global timestamp
+    global selected_pos
     global times
     last_time = time.time()
     new_file = not det_text
     last_detection_line = 0
     parse_array = False
+
     while True:
+        try:
+            selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+        except:
+            selected_pos = -1
         time_check = time.time()
         t1 = time.time()
         try:
@@ -678,7 +1003,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
                 while time_curr <= timestamp:
                     # print(timestamp, time_curr)
                     if time_curr == timestamp:
-                        print(det_text[det_curr])
+                        # print(det_text[det_curr])
                         detection_queue.append(eval(detections_current[det_index])["bounding box"])
                         det_packet_curr = eval(detections_current[det_index])
                         det_curr = det_index
@@ -718,12 +1043,18 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             if time_check - last_time >= 1 / (4 * fps):
                 data_queue.append(line_check)
                 if realtime >= end_time:
-                    raise
+                    raise e
             if not pause:
                 text_line += 1
                 if text_line == text_length:
                     text_line -= 1
         time.sleep(1 / fps)
+
+        if text_line > len(text) - 1:
+            text_line = len(text) - 1
+            pause = True
+
+        data_text = text
 
 
 def stream_unified_text(text_lines, fps):
@@ -763,6 +1094,12 @@ def stream_unified_text(text_lines, fps):
         if not pause:
             text_line += 1
         time.sleep(1 / fps)
+
+        if text_line > len(text) - 1:
+            text_line =len(text)-1
+            pause = True
+
+        data_text = text
 
 
 def mqtt_processes(address, topic_raw_in, topic_detect_in, usn, pw):
@@ -825,6 +1162,42 @@ def network(message):
     return []
 
 
+def time_change(date, hours=0, minutes=0):
+    return datetime.strptime(date, '%Y-%m-%d %H:%M:%S') + timedelta(hours=hours, minutes=minutes)
+
+
+def date_format(date, format='%Y-%m-%d %H:%M:%S'):
+    try:
+        date_obj = datetime.strptime(date, format)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+
+def ohno():
+    mixer.init()
+    mixer.music.set_volume(0.7)
+    mixer.music.load('ohno.mp3')
+    mixer.music.play()
+
+def restream_format(path):
+    with open(path, 'r') as f:
+        text = f.readlines()
+
+    out_txt = '[['
+
+    for x in text:
+        x = x.rstrip()
+        x = x.replace('\'', '"')
+        out_txt += 'b\'' + x + '\', '
+
+    out_txt = out_txt[:-2] + ']]'
+
+    with open(path, 'w') as f:
+        f.write(out_txt)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-path", default="", help="Path to saved data (in .txt format)")
@@ -840,6 +1213,18 @@ def main():
     parser.add_argument("-uni", default="f")
     parser.add_argument("-gtv", default="")
 
+    parser.add_argument("-restream", default="f")
+    parser.add_argument("-ts", default="", help="Start time for restream")
+    parser.add_argument("-te", default="", help="End time for restream")
+    parser.add_argument("-to", default="", help="Offset time if no end time for restream")
+    parser.add_argument("-hid", default="", help="Hive id for restream")
+    parser.add_argument("-sensor", default="", help="Sensor id(mac address)for restream")
+    parser.add_argument("-db", default="", help="Database for for restream")
+
+    parser.add_argument("-normalized", default="f", help="If the data is normalized or not")
+    parser.add_argument("-snap", default="f", help="Snap to nearest pixel")
+
+
     args = parser.parse_args()
 
     path = args.path if args.path else None
@@ -850,11 +1235,30 @@ def main():
     mac = args.mac
     unified = args.uni == "t"
     aspect_ratio = (eval(args.sz), eval(args.sz))
-    live = (not path) and (len(topic) > 0)
+
+    try:
+        live = (not path) and (len(topic) > 0) and (len(address) > 0)
+    except:
+        live = False
+
     label = (args.lbl == "t")
+    # for restream
+    ts = args.ts if args.ts else None
+    te = args.te if args.te else None
+    to = args.to if args.to else None
+    hid = args.hid if args.hid else None
+    db = args.db if args.db else None
+    sensor = args.sensor if args.sensor else None
+    restream = (args.restream == 't')
+
+    normal = (args.normalized == 't')
+    snap = (args.snap == 't')
     gtv = args.gtv
+
     visualizer(data_path=path, data_topic=topic, mqtt_address=address, fps=fps, aspect_ratio=aspect_ratio, live=live,
-               label=label, detection_path=det_path, mac=mac, unified=unified, gtVidPath=gtv)
+               label=label, detection_path=det_path, mac=mac, unified=unified, restream=restream, time_start=ts, time_offset=to, time_end=te,
+               hid=hid, sensor=sensor, db=db, normalized=normal, snap=snap, gtVidPath=gtv)
+
     # visualizer(data_path="test_data/lying_15_32x32_sensor.txt", data_topic="butlr/heatic/amg8833/test")
     # visualizer(mqtt_address="ec2-54-245-187-200.us-west-2.compute.amazonaws.com",
     #            data_topic="butlr/heatic/amg8833/test",
