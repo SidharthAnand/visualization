@@ -1369,8 +1369,9 @@ def stream_unified_text(text_lines, fps):
             text_line += 1
         time.sleep(1 / fps)
 
-        if text_line > len(text) - 1:
-            text_line = len(text) - 1
+
+        if text_line > text_length - 1:
+            text_line = text_length - 1
             pause = True
 
         data_text = text
