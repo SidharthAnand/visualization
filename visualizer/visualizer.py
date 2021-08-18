@@ -58,6 +58,8 @@ def visualizer(
     global detection_queue
     global det_index
     global det_curr
+    global boxes
+    global class_labels
     global text_length
     global client
     global pause
@@ -69,6 +71,8 @@ def visualizer(
     global category_ids
     global category_options
     global vizMac
+    global norm
+    global box_lbl
 
     timestamp = time.time()
     vizMac = mac
@@ -175,6 +179,7 @@ def visualizer(
     low_bound = 65
     high_bound = 115
 
+    changed = False
     data_queue = deque([])
     detection_queue = deque([])
 
@@ -494,6 +499,7 @@ def visualizer(
         offset = 1
         if multiplier == 1.55:
             offset = 3.025
+
         disp.blit(
             logo,
             (
@@ -529,6 +535,7 @@ def visualizer(
                         starting_option="Sitting",
                         manager=manager,
                     )
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
                 elif event.key == pygame.K_w and label_condiition:
                     pos_drop.kill()
                     pos_drop = pygame_gui.elements.UIDropDownMenu(
@@ -544,6 +551,8 @@ def visualizer(
                         starting_option="Standing",
                         manager=manager,
                     )
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+
                 elif event.key == pygame.K_e and label_condiition:
                     pos_drop.kill()
                     pos_drop = pygame_gui.elements.UIDropDownMenu(
@@ -559,6 +568,8 @@ def visualizer(
                         starting_option="Lying Down",
                         manager=manager,
                     )
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+
                 elif event.key == pygame.K_a and label_condiition:
                     pos_drop.kill()
                     pos_drop = pygame_gui.elements.UIDropDownMenu(
@@ -574,6 +585,8 @@ def visualizer(
                         starting_option="Uncertain",
                         manager=manager,
                     )
+                    selected_pos = category_ids[category_options.index(pos_drop.selected_option)]
+
                 elif event.key == pygame.K_f and label_condiition:
                     text_line = max(0, text_line - 1)
                 elif event.key == pygame.K_g and label_condiition:
@@ -598,7 +611,7 @@ def visualizer(
                     else:
                         color = lambda x, y, z: thermal(x, y, z)
                         color_on = True
-                elif label_condiition and pygame.K_c:
+                elif label_condiition and event.key == pygame.K_c:
                     if detection_path and not unified:
                         sensor = eval(det_out_file[det_curr])["ID"]
                         det_out_file[det_curr] = str(
@@ -608,8 +621,10 @@ def visualizer(
 
                     elif not detection_path and not unified:
                         times[timestamp] = []
+
                     else:
                         assert unified and not detection_path
+                        bb_lbl_dict[timestamp] = []
                         cleared = eval(text[text_line])
                         cleared = {
                             k: v if k != "bbox" else [] for k, v in cleared.items()
@@ -634,7 +649,7 @@ def visualizer(
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
-                # print(det_curr)
+
                 if label_condiition:
                     x = pos[0]
                     y = pos[1]
@@ -681,6 +696,11 @@ def visualizer(
                             for x in new_boxes:
                                 bb_lbl.append(selected_pos)
 
+
+                            if unified and not detection_path:
+                                if len(eval(text[text_line])['category_id']) == len(eval(text[text_line])['bbox']):
+                                    pass
+                                    # bb_lbl_dict[timestamp].extend(class_labels)
                             if detection_path and not unified:
                                 try:
                                     det_line = eval(det_out_file[det_curr])
@@ -726,11 +746,21 @@ def visualizer(
                             except:
                                 bb_lbl_dict[timestamp] = bb_lbl
 
+                            if unified and not detection_path:
+                                if class_labels:
+                                    bb_lbl_dict[timestamp].extend(class_labels)
+                                else:
+                                    pass
                             bbs.extend(new_boxes)
+                            # class_labels += bb_lbl_dict[timestamp]
+                            # bb_lbl_dict[timestamp] = class_labels
+
+                            # bb_lbl_dict[timestamp].reverse()
                             bbs, bb_lbl_dict[timestamp] = (
                                 list(t)
                                 for t in zip(*sorted(zip(bbs, bb_lbl_dict[timestamp])))
                             )
+
                             # bbs.sort3(key=lambda p: p[0]) # sort based on x coordinate of first element
                             # print(bbs, bb_lbl)
                             # print([x for _, x in sorted(zip(bb_lbl, bbs), key=lambda pair: pair[0])])
@@ -754,7 +784,10 @@ def visualizer(
                             elif not detection_path and unified:
                                 new_line = eval(text[text_line])
                                 new_line["bbox"] = bbs
+                                new_line['category_id'] = bb_lbl_dict[timestamp]
+
                                 text[text_line] = str(new_line) + "\n"
+                                print(new_line)
 
                             # print(times)
                             # print(bb_lbl_dict)
@@ -908,15 +941,16 @@ def visualizer(
                                                     "image": data.tolist(),
                                                     "bbox": bb_out,
                                                     "category_id": p,
-                                                    "timestamp": t,
+                                                    "timestamp": float(t),
                                                     "mac_address": sensor_mac,
-                                                    "normalized": norm,
+                                                    "normalized": str(norm),
                                                 }
                                             )
                                         )
                                     )
                                 with open(edited_detection_path, "a+") as f:
                                     f.writelines([x + "\n" for x in det_out_file])
+
                             else:
                                 with open(data_path[:-4] + "_EDITED.txt", "w") as f:
                                     f.writelines(text)
@@ -941,6 +975,8 @@ def visualizer(
 
                         else:
                             assert unified and not detection_path
+                            bb_lbl_dict[timestamp] = []
+
                             cleared = eval(text[text_line])
                             cleared = {
                                 k: v if k != "bbox" else [] for k, v in cleared.items()
@@ -1096,6 +1132,7 @@ def visualizer(
                 rect_color = red
 
             cnt = 0
+
             for b in boxes:
                 z = aspect_ratio[0] * frac
                 if not label:
@@ -1197,6 +1234,7 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
     global category_ids
     global category_options
     global pos_drop
+    global class_labels
     global timestamp
     global selected_pos
     global times
@@ -1206,12 +1244,6 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
     parse_array = False
 
     while True:
-        try:
-            selected_pos = category_ids[
-                category_options.index(pos_drop.selected_option)
-            ]
-        except:
-            selected_pos = -1
         time_check = time.time()
         t1 = time.time()
         try:
@@ -1259,8 +1291,9 @@ def stream_text_data(text_full, det_text, fps, start_time, end_time):
             detections_current = det_text[last_detection_line:]
             det_index = 0
             try:
-                time_curr = eval(detections_current[det_index])["timestamp"]
-                while time_curr <= timestamp:
+                time_curr = float(eval(detections_current[det_index])["timestamp"])
+                timestamp = float(timestamp)
+                while float(time_curr) <= float(timestamp):
                     # print(timestamp, time_curr)
                     if time_curr == timestamp:
                         # print(det_text[det_curr])
@@ -1326,19 +1359,19 @@ def stream_unified_text(text_lines, fps):
     global detection_queue
     global det_packet_curr
     global det_index
+    global norm
     global det_curr
+    global class_labels
     global text_length
     global pause
+    global changed
     global timestamp
     global times
+    global box_lbl
     global bb_lbl_dict
 
-    last_detection_line = 0
     text_length = len(text_lines)
-    for x in range(text_length):
-        text_lines[x] = text_lines[x].rstrip()
 
-    # print(text_length)
     while True:
         try:
             text = text_lines[text_line]
@@ -1351,8 +1384,9 @@ def stream_unified_text(text_lines, fps):
         class_labels = text["category_id"]
         data = text["image"]
         boxes = text["bbox"]
+        norm = text["normalized"]
         sensor = text["mac_address"]
-        bb_lbl_dict[timestamp] = class_labels
+
         data_queue.append(data)
         out_boxes = [
             [
@@ -1361,10 +1395,27 @@ def stream_unified_text(text_lines, fps):
             ]
             for b in boxes
         ]
+        c = 0
+        cl = []
+        # print(len(out_boxes))
+        if len(out_boxes) > len(class_labels):
+            for x in class_labels:
+                cl.append(class_labels[c])
+                c += 1
+        else:
+            for x in out_boxes:
+                cl.append(class_labels[c])
+                c += 1
+        class_labels = cl
+        text["category_id"] = class_labels
+
+        if class_labels:
+            bb_lbl_dict[timestamp] = class_labels
         detection_queue.append(out_boxes)
 
         playback.set_current_value(text_line / text_length)
         playback.update(1 / 100)
+        # print(class_labels)
         if not pause:
             text_line += 1
         time.sleep(1 / fps)
