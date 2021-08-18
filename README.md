@@ -63,3 +63,21 @@ To add a bounding box, just click on the data window to specify the TOP LEFT and
 Pressing *Done Editing* does **NOT** save the file and quit out of the visualizer; it just stops the editing process until it is pressed again.
 
 Once you are finished editing the bounding box data, quit out of the visualizer to save the file using *Exit* or the escape key. A new file will be written to the same path as your original detection text file, but with the suffix *_EDITED* attached to denote that it has been checked by hand. The new file will maintain all bounding boxes that were not edited, even if you did not scroll through them in the visualizer. If you wish to rewrite the file, **DELETE THE EXISTING FILE BEFORE CREATING A NEW ONE WITH THE VISUALIZER'S LABELING TOOL**, or just pass in the *_EDITED* file to the tool in the running command to restart the process with the file you just finished editing.
+
+#### Keyboard Shortcuts
+- right arrow: 100 frame forward 
+- left arrow: 100 frames backwards
+- space: pause/play
+- t: toggle color
+- r: enter/exit revision mode 
+- f: one frame back when in revision mode
+- g: one frame forward when in revision mode
+- c: clear frame when in revision mode
+- q: set position label to sitting 
+- w: set position label to standing 
+- e: set position label to lying down 
+- a: set position label to uncertain
+
+#### Additional Options  
+- _-snap t_: points for bounding boxes snap to nearest corner
+- _-uni t_: set to _t_ when data is in unified format
